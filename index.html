@@ -1035,28 +1035,28 @@ async function enviarParaSheets() {
     const c = cfg();
 
     // Build rows for transacoes
+    // ID_Transacao|Data|Descricao_Extrato|Valor|Moeda|Conta|ID_Conta|Canal|Tipo|Categoria|Subcategoria|Projeto|Entidade|Status|Observacoes|ID_Despesa_Link
     const transRows = avista.map(t => {
-      // Colunas: ID_Transacao, Data, Descricao_Extrato, Valor, Moeda, Conta, ID_Conta,
-      //          Canal, Tipo, Categoria, Subcategoria, Projeto, Entidade, Status, Observacoes, ID_Despesa_Link
-      const tipo = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
+      const tipo      = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
       const categoria = t.tipo === 'cred' ? 'Receita' : 'DESPESA';
+      const subcat    = t.tipo === 'cred' ? 'Crédito/Estorno' : t.categoria;
       return [
-        t.id,          // ID_Transacao
-        t.data,        // Data
-        t.desc,        // Descricao_Extrato
-        t.valor.toFixed(2), // Valor
-        t.moeda,       // Moeda
-        t.conta,       // Conta
-        t.idConta,     // ID_Conta
-        'Cartao',      // Canal
-        tipo,          // Tipo: CARTAO ou RECEITA
-        categoria,     // Categoria: DESPESA ou Receita
-        t.tipo === 'cred' ? 'Crédito/Estorno' : t.categoria, // Subcategoria
-        '',            // Projeto
-        t.entidade,    // Entidade
-        'Classificada', // Status
-        '',            // Observacoes
-        ''             // ID_Despesa_Link
+        t.id,               // 1  ID_Transacao
+        t.data,             // 2  Data
+        t.desc,             // 3  Descricao_Extrato
+        t.valor.toFixed(2), // 4  Valor
+        t.moeda,            // 5  Moeda
+        t.conta,            // 6  Conta
+        t.idConta,          // 7  ID_Conta
+        'Cartao',           // 8  Canal
+        tipo,               // 9  Tipo
+        categoria,          // 10 Categoria
+        subcat,             // 11 Subcategoria
+        '',                 // 12 Projeto
+        t.entidade,         // 13 Entidade
+        'Classificada',     // 14 Status
+        '',                 // 15 Observacoes
+        ''                  // 16 ID_Despesa_Link
       ];
     });
 
@@ -1435,17 +1435,28 @@ function buildOutputs() {
 
   // transacoes TSV
   // sem cabeçalho — cola direto na linha vazia do Sheets
+  // ID_Transacao|Data|Descricao_Extrato|Valor|Moeda|Conta|ID_Conta|Canal|Tipo|Categoria|Subcategoria|Projeto|Entidade|Status|Observacoes|ID_Despesa_Link
   const transRows = avista.map(t => {
-    const tipo = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
-    const subcat = t.tipo === 'cred' ? 'Crédito/Estorno' : '';
+    const tipo      = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
+    const categoria = t.tipo === 'cred' ? 'Receita' : 'DESPESA';
+    const subcat    = t.tipo === 'cred' ? 'Crédito/Estorno' : t.categoria;
     return [
-      t.id, t.data, t.desc,
-      t.valor.toFixed(2),
-      t.moeda, t.conta, t.idConta,
-      'Cartao', tipo,
-      t.tipo === 'cred' ? 'Receita' : 'DESPESA',
-      subcat, t.categoria, t.entidade,
-      'Classificada', '', ''
+      t.id,               // 1  ID_Transacao
+      t.data,             // 2  Data
+      t.desc,             // 3  Descricao_Extrato
+      t.valor.toFixed(2), // 4  Valor
+      t.moeda,            // 5  Moeda
+      t.conta,            // 6  Conta
+      t.idConta,          // 7  ID_Conta
+      'Cartao',           // 8  Canal
+      tipo,               // 9  Tipo
+      categoria,          // 10 Categoria
+      subcat,             // 11 Subcategoria
+      '',                 // 12 Projeto
+      t.entidade,         // 13 Entidade
+      'Classificada',     // 14 Status
+      '',                 // 15 Observacoes
+      ''                  // 16 ID_Despesa_Link
     ].join('\t');
   });
   document.getElementById('outTrans').textContent = transRows.join('\n');
