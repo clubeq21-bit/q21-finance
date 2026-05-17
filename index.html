@@ -1037,9 +1037,9 @@ async function enviarParaSheets() {
     // Build rows for transacoes
     // ID_Transacao|Data|Descricao_Extrato|Valor|Moeda|Conta|ID_Conta|Canal|Tipo|Categoria|Subcategoria|Projeto|Entidade|Status|Observacoes|ID_Despesa_Link
     const transRows = avista.map(t => {
-      const tipo      = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
-      const categoria = t.tipo === 'cred' ? 'Receita' : 'DESPESA';
-      const subcat    = t.tipo === 'cred' ? 'Crédito/Estorno' : t.categoria;
+      const tipoSheet = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
+      const cat       = t.tipo === 'cred' ? 'Outras fontes' : t.categoria;
+      const sub       = t.tipo === 'cred' ? 'Crédito/Estorno' : (t.subcategoria || '');
       return [
         t.id,               // 1  ID_Transacao
         t.data,             // 2  Data
@@ -1049,9 +1049,9 @@ async function enviarParaSheets() {
         t.conta,            // 6  Conta
         t.idConta,          // 7  ID_Conta
         'Cartao',           // 8  Canal
-        tipo,               // 9  Tipo
-        categoria,          // 10 Categoria
-        subcat,             // 11 Subcategoria
+        tipoSheet,          // 9  Tipo: CARTAO ou RECEITA
+        cat,                // 10 Categoria
+        sub,                // 11 Subcategoria
         '',                 // 12 Projeto
         t.entidade,         // 13 Entidade
         'Classificada',     // 14 Status
@@ -1190,20 +1190,56 @@ async function processarComClaude() {
 
     const c = cfg();
 
-    const systemPrompt = `Extraia transações de fatura de cartão. Responda SOMENTE com JSON puro, zero texto adicional.
+    const entidade = cfg().entidade;
+    const isPJ = entidade.startsWith('PJ');
 
-Exclua: saldo anterior, pagamentos de fatura.
-Inclua: todas as compras.
+    const catsPF = `
+SAÍDA - Alimentação: Em casa | Fora de casa
+SAÍDA - Saúde: Plano de saúde | Medicamentos e acessórios | Dentista e saúde bucal | Saúde da visão | Exames e consultas | Outras despesas
+SAÍDA - Pessoais: Higiene Pessoal e Beleza | Vestuário e Acessórios | Academia e Saúde | Presentes | Doações | Outras despesas | Saldo inicial
+SAÍDA - Residenciais: Aquisição de artigos para casa | Aquisição de Móveis e Eletros | Aluguel | Financiamento/Consórcio | Condomínio | Diarista | Higiene, conservação e limpeza | Manutenção e reformas | Seguro / Segurança | Impostos e taxas | Outras despesas
+SAÍDA - Serviços: Água | Energia elétrica | Gás | Telefonia | Internet | Streaming TV e música | Outros serviços
+SAÍDA - Viagens: Hospedagem | Alimentação | Combustível | Passagens | Locações | Outras despesas com viagens
+SAÍDA - Veículos: Combustível para locomoção | Manutenção | Peças e acessórios | Limpeza | Estacionamento | Seguro | Financiamento/Consórcio | Impostos e taxas | Multas | Outras despesas
+SAÍDA - Lazer: Cinema e locações | Eventos esportivos e culturais | Festas, passeios e diversão | Alimentação | Outras despesas
+SAÍDA - Desenvolvimento Pessoal: Cursos | Livros
+SAÍDA - Bancos e cartões: Empréstimos e financiamentos | Cheque especial | Juros - Cartão | Manutenção e tarifas | Outros serviços
+SAÍDA - Investimentos e recebíveis: Sonhos | Aplicações financeiras | Aplicação em fundos | Aplicação em ações | Previdência Privada | Poupança | Fundo de Reservas
+SAÍDA - Restituíveis: Empréstimos pessoais | Glendon Assis Results Coach | Ralu Boutique
+ENTRADA - Negócios: Consultoria / Mentoria | Pró-labore | Vendas
+ENTRADA - Outras fontes: Contas recebidas | Crédito de empréstimos/financiamentos | Venda de bens | Venda de milhas | Saldo inicial
+ENTRADA - Restituições: Ralu Boutique | Glendon Assis Results Coach | Restituição de empréstimos pessoais`;
 
-Formato mínimo (sem campos extras):
-{"t":[{"d":"DD/MM","n":"nome","v":123.45,"tp":"a","pa":1,"pt":1,"c":"Outros"}]}
+    const catsPJ = `
+SAÍDA - Operacionais e Comerciais: Estorno de vendas | Fornecedores | Material de escritório | Contador | Aluguel | Impostos | Sistema | Segurança | Manutenção e limpeza predial | Marketing e Propaganda | Alimentação
+SAÍDA - Bancos e cartões: Pagamento de empréstimos e financiamentos | Cobertura de limite cheque especial | Juros - Cartão | Juros - Cheque especial | Manutenção e tarifas | Outros serviços
+SAÍDA - Restituíveis: Empréstimos pessoais | Glendon Assis Results Coach | Restituição de empréstimos pessoais
+SAÍDA - Viagens: Hospedagem | Alimentação | Combustível | Passagens | Locações | Outras despesas com viagens
+SAÍDA - Serviços: Água | Energia elétrica | Gás | Telefonia e Internet | Outros serviços
+SAÍDA - Pessoal: Funcionários Fixos | Funcionários Eventuais | Pró-labore | Outras despesas
+SAÍDA - Veículos: Abastecimento | Manutenção e conservação | Seguro | Financiamento/Consórcio | Impostos e taxas | Multas | Outras despesas
+ENTRADA - Vendas: Recebimentos em dinheiro | Recebimento de vendas em cartão | Recebimento em PIX | Recebimento em boleto`;
 
-Legenda dos campos:
-d=data DD/MM, n=descrição curta (max 40 chars), v=valor positivo, 
-tp= a(avista) p(parcelada) cr(credito) pf(pagamento_fatura-EXCLUIR),
-pa=parcela atual, pt=parcela total, c=categoria
+    const catsUsadas = isPJ ? catsPJ : catsPF;
 
-Categorias: Restaurantes Supermercados Serviços Saúde Lazer Vestuário Combustível Viagem Educação Assinatura Outros`;
+    const systemPrompt = `Extraia transações de fatura de cartão de crédito. Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.
+
+Exclua: saldo anterior, pagamentos de fatura, resumo.
+Inclua: todas as compras e créditos/estornos.
+
+Formato (campos obrigatórios):
+{"t":[{"d":"DD/MM","n":"descrição curta max 40 chars","v":123.45,"tp":"a","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}
+
+tp: a=à vista, p=parcelada, cr=crédito/estorno, pf=pagamento fatura(EXCLUIR)
+pa=parcela atual, pt=parcela total, v=valor sempre positivo
+
+Para parceladas: extraia pa e pt da descrição. Ex: PARC 03/12 → pa:3, pt:12
+
+Classifique usando EXATAMENTE estas categorias e subcategorias:
+${catsUsadas}
+
+Se não encaixar em nenhuma: cat="Pessoais" sub="Outras despesas" (PF) ou cat="Operacionais e Comerciais" sub="Alimentação" (PJ).
+Créditos/estornos: tp="cr".`;
 
     let messages;
     if (pdfBase64) {
@@ -1271,19 +1307,19 @@ Categorias: Restaurantes Supermercados Serviços Saúde Lazer Vestuário Combust
     txs = [];
 
     for (const t of lista) {
-      // campo tp (compacto) ou tipo (completo)
       const tp = t.tp || t.tipo || 'a';
       if (tp === 'pf' || tp === 'pagamento_fatura') continue;
 
-      const data    = t.d || t.data || '';
-      const desc    = t.n || t.descricao || '';
-      const valor   = parseFloat(t.v || t.valor || 0);
-      const cat     = t.c || t.categoria_sugerida || '';
-      const pa      = parseInt(t.pa || t.parcela_atual || 1);
-      const pt      = parseInt(t.pt || t.parcela_total || 1);
+      const data   = t.d || t.data || '';
+      const desc   = t.n || t.descricao || '';
+      const valor  = parseFloat(t.v || t.valor || 0);
+      const cat    = t.cat || t.c || t.categoria_sugerida || '';
+      const sub    = t.sub || t.subcategoria || '';
+      const pa     = parseInt(t.pa || t.parcela_atual || 1);
+      const pt     = parseInt(t.pt || t.parcela_total || 1);
 
-      const isCred  = tp === 'cr' || tp === 'credito';
-      const isParc  = tp === 'p'  || tp === 'parcelada';
+      const isCred = tp === 'cr' || tp === 'credito';
+      const isParc = tp === 'p'  || tp === 'parcelada';
 
       const hash = [data, desc.slice(0, 15), valor.toFixed(2)].join('|');
       const isDup = dupeHash.has(hash);
@@ -1306,6 +1342,7 @@ Categorias: Restaurantes Supermercados Serviços Saúde Lazer Vestuário Combust
         idConta: c2.conta,
         tipo: isCred ? 'cred' : isParc ? 'parc' : 'avista',
         categoria: cat,
+        subcategoria: sub,
         parcAtual: pa,
         parcTotal: pt,
         entidade: c2.entidade,
@@ -1437,9 +1474,9 @@ function buildOutputs() {
   // sem cabeçalho — cola direto na linha vazia do Sheets
   // ID_Transacao|Data|Descricao_Extrato|Valor|Moeda|Conta|ID_Conta|Canal|Tipo|Categoria|Subcategoria|Projeto|Entidade|Status|Observacoes|ID_Despesa_Link
   const transRows = avista.map(t => {
-    const tipo      = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
-    const categoria = t.tipo === 'cred' ? 'Receita' : 'DESPESA';
-    const subcat    = t.tipo === 'cred' ? 'Crédito/Estorno' : t.categoria;
+    const tipoSheet = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
+    const cat       = t.tipo === 'cred' ? 'Outras fontes' : t.categoria;
+    const sub       = t.tipo === 'cred' ? 'Crédito/Estorno' : (t.subcategoria || '');
     return [
       t.id,               // 1  ID_Transacao
       t.data,             // 2  Data
@@ -1449,9 +1486,9 @@ function buildOutputs() {
       t.conta,            // 6  Conta
       t.idConta,          // 7  ID_Conta
       'Cartao',           // 8  Canal
-      tipo,               // 9  Tipo
-      categoria,          // 10 Categoria
-      subcat,             // 11 Subcategoria
+      tipoSheet,          // 9  Tipo: CARTAO ou RECEITA
+      cat,                // 10 Categoria: ex Alimentação, Saúde...
+      sub,                // 11 Subcategoria: ex Fora de casa
       '',                 // 12 Projeto
       t.entidade,         // 13 Entidade
       'Classificada',     // 14 Status
