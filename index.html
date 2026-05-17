@@ -1327,9 +1327,11 @@ Créditos/estornos: tp="cr".`;
 
       const anoMes = c2.mes.replace('-', '/');
       const partes = data.split('/');
+      // formato DD/MM/AA
+      const aaShort = anoMes.slice(2,4);
       const dataFull = partes.length === 2
-        ? anoMes.slice(0,4) + '/' + partes[1] + '/' + partes[0]
-        : anoMes.slice(0,4) + '/01/01';
+        ? partes[0] + '/' + partes[1] + '/' + aaShort
+        : '01/01/' + aaShort;
 
       txs.push({
         id: 'TX_' + Math.random().toString(36).slice(2, 8).toUpperCase(),
