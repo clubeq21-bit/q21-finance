@@ -1073,7 +1073,7 @@ async function enviarParaSheets() {
         total.toFixed(2),
         restantes,
         Math.min(t.parcAtual + 1, t.parcTotal),
-        t.conta, t.idConta, t.categoria,
+        t.conta, t.idConta, '',
         t.entidade, 'Ativa'
       ];
     });
@@ -1084,7 +1084,7 @@ async function enviarParaSheets() {
     // Send transacoes
     if (transRows.length) {
       statusEl.textContent = `⏳ Enviando ${transRows.length} transações à vista...`;
-      const r1 = await fetch(`${baseUrl}/${encodeURIComponent(shCfg.trans)}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+      const r1 = await fetch(`${baseUrl}/${encodeURIComponent(shCfg.trans)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ values: transRows })
@@ -1095,7 +1095,7 @@ async function enviarParaSheets() {
     // Send parceladas
     if (parcRows.length) {
       statusEl.textContent = `⏳ Enviando ${parcRows.length} parceladas...`;
-      const r2 = await fetch(`${baseUrl}/${encodeURIComponent(shCfg.parc)}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+      const r2 = await fetch(`${baseUrl}/${encodeURIComponent(shCfg.parc)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ values: parcRows })
@@ -1511,7 +1511,7 @@ function buildOutputs() {
       total.toFixed(2),
       restantes,
       Math.min(t.parcAtual + 1, t.parcTotal),
-      t.conta, t.idConta, t.categoria,
+      t.conta, t.idConta, '',
       t.entidade, 'Ativa'
     ].join('\t');
   });
