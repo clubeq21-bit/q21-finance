@@ -1036,16 +1036,27 @@ async function enviarParaSheets() {
 
     // Build rows for transacoes
     const transRows = avista.map(t => {
+      // Colunas: ID_Transacao, Data, Descricao_Extrato, Valor, Moeda, Conta, ID_Conta,
+      //          Canal, Tipo, Categoria, Subcategoria, Projeto, Entidade, Status, Observacoes, ID_Despesa_Link
       const tipo = t.tipo === 'cred' ? 'RECEITA' : 'CARTAO';
+      const categoria = t.tipo === 'cred' ? 'Receita' : 'DESPESA';
       return [
-        t.id, t.data, t.desc,
-        t.valor.toFixed(2),
-        t.moeda, t.conta, t.idConta,
-        'Cartao', tipo,
-        t.tipo === 'cred' ? 'Receita' : 'DESPESA',
-        t.tipo === 'cred' ? 'Crédito/Estorno' : '',
-        t.categoria, t.entidade,
-        'Classificada', '', ''
+        t.id,          // ID_Transacao
+        t.data,        // Data
+        t.desc,        // Descricao_Extrato
+        t.valor.toFixed(2), // Valor
+        t.moeda,       // Moeda
+        t.conta,       // Conta
+        t.idConta,     // ID_Conta
+        'Cartao',      // Canal
+        tipo,          // Tipo: CARTAO ou RECEITA
+        categoria,     // Categoria: DESPESA ou Receita
+        t.tipo === 'cred' ? 'Crédito/Estorno' : t.categoria, // Subcategoria
+        '',            // Projeto
+        t.entidade,    // Entidade
+        'Classificada', // Status
+        '',            // Observacoes
+        ''             // ID_Despesa_Link
       ];
     });
 
