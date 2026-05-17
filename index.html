@@ -898,6 +898,7 @@ function initGoogleAuth() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: SHEETS_SCOPE,
+    redirect_uri: 'https://clubeq21-bit.github.io/q21-finance/',
     callback: (resp) => {
       if (resp.error) { toast('Erro Google: ' + resp.error, 'red'); return; }
       googleAccessToken = resp.access_token;
