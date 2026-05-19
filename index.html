@@ -971,6 +971,19 @@ async function analisarPlanilha() {
     const semCategoria = transRows.slice(1).filter(r => (!r[catIdx] || !r[subIdx]) && r[descIdx]);
     const semEntidade  = transRows.slice(1).filter(r => !r[entIdx] && r[descIdx]);
 
+    // Despesas sem categoria — colunas E(4)=Categoria, F(5)=Subcategoria, D(3)=Descricao
+    const despHeaders = despRows[0] || [];
+    const despDescIdx = despHeaders.indexOf('Descricao') !== -1 ? despHeaders.indexOf('Descricao') : 3;
+    const despCatIdx  = despHeaders.indexOf('Categoria') !== -1 ? despHeaders.indexOf('Categoria') : 4;
+    const despSubIdx  = despHeaders.indexOf('Subcategoria') !== -1 ? despHeaders.indexOf('Subcategoria') : 5;
+    const despIdIdx   = despHeaders.indexOf('ID_Despesa') !== -1 ? despHeaders.indexOf('ID_Despesa') : 0;
+    const despEntIdx  = despHeaders.indexOf('Entidade') !== -1 ? despHeaders.indexOf('Entidade') : 8;
+    const semDespCat  = despRows.slice(1).filter(r => (!r[despCatIdx] || !r[despSubIdx]) && r[despDescIdx]);
+    
+    // Store for later use in showIssue
+    window._despRows = despRows;
+    window._despIdx = { id: despIdIdx, desc: despDescIdx, cat: despCatIdx, sub: despSubIdx, ent: despEntIdx };
+
     // Process in batches of 40
     const BATCH = 40;
     const allSugestoes = [];
@@ -1030,15 +1043,60 @@ Retorne JSON puro sem markdown. Use os IDs exatamente como fornecidos:
         <div class="issue-item" onclick="showIssue('sem_ent')"><div class="issue-dot" style="background:var(--red)"></div>Sem entidade</div>
       </div>
       <div class="issue-group">
+        <div class="issue-group-label">Despesas <span class="issue-count ${semDespCat.length > 0 ? 'amber' : 'green'}">${semDespCat.length}</span></div>
+        <div class="issue-item ${currentIssueType === 'desp_cat' ? 'active' : ''}" onclick="showIssue('desp_cat')"><div class="issue-dot" style="background:var(--amber)"></div>Sem categoria</div>
+      </div>
+      <div class="issue-group">
         <div class="issue-group-label">Resumo</div>
         <div style="font-size:11px;color:var(--muted);font-family:var(--mono);line-height:2">
           transacoes: ${transRows.length - 1}<br>
           despesas: ${despRows.length - 1}<br>
           recebiveis: ${recRows.length - 1}<br>
-          sem categoria: ${semCategoria.length}
+          trans sem categoria: ${semCategoria.length}<br>
+          desp sem categoria: ${semDespCat.length}
         </div>
       </div>`;
     document.getElementById('sidebarContent').innerHTML = sidebar;
+
+    showIssue('sem_cat', reviewSuggestions);
+    
+    // Store desp suggestions trigger
+    window._analisarDespesas = async function() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+      const despRows = window._despRows || [];
+      const idx = window._despIdx || {};
+      const semDesp = despRows.slice(1).filter(r => (!r[idx.cat] || !r[idx.sub]) && r[idx.desc]);
+      if (!semDesp.length) { toast('Nenhuma despesa sem categoria!', 'green'); return; }
+      
+      document.getElementById('reviewContent').innerHTML = `<div class="empty-state"><div class="icon spinner-icon">↻</div><p>Classificando ${Math.min(semDesp.length,120)} despesas...</p></div>`;
+      
+      const BATCH = 40; const allS = [];
+      for (let i = 0; i < Math.min(semDesp.length, 120); i += BATCH) {
+        const batch = semDesp.slice(i, i + BATCH);
+        const prompt = `Classifique estas despesas de cartão de crédito do Glendon Miranda.
+IMPORTANTE: use o campo "id" EXATAMENTE como fornecido.
+Entidades: PF_BR=pessoal, PJ_BR=Q21 negócio, PF_EU=Europa, LLC_US=EUA
+Categorias PF_BR: Alimentação(Em casa|Fora de casa), Saúde(Medicamentos|Plano de saúde|Dentista|Exames), Pessoais(Higiene e Beleza|Vestuário|Presentes), Residenciais(Aluguel|Condomínio|Energia elétrica|Manutenção), Serviços(Telefonia|Internet|Streaming), Viagens(Hospedagem|Passagens|Combustível|Alimentação), Veículos(Combustível para locomoção|Manutenção|Estacionamento|Multas), Lazer(Cinema|Eventos|Festas), Bancos e cartões(Anuidade|Juros - Cartão)
+Categorias PJ_BR: Operacionais e Comerciais(Marketing|Sistema|Contador|Fornecedores), Pessoal(Pró-labore|Funcionários), Viagens(Hospedagem|Passagens|Alimentação), Serviços(Energia elétrica|Telefonia)
+Despesas: ${JSON.stringify(batch.map(r => ({ id: r[idx.id], desc: r[idx.desc], entidade: r[idx.ent]||'' })))}
+JSON puro: {"sugestoes":[{"id":"...","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","confianca":"alta"}]}`;
+        try {
+          const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:prompt}]}) });
+          const d = await resp.json();
+          const raw = d.content?.find(b=>b.type==='text')?.text||'{"sugestoes":[]}';
+          const clean = raw.replace(/```json|```/g,'').trim();
+          const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
+          allS.push(...(parsed.sugestoes||[]));
+        } catch(e) { console.warn('batch err',e); }
+        if (i+BATCH < Math.min(semDesp.length,120)) await new Promise(r=>setTimeout(r,500));
+      }
+      
+      reviewSuggestions = allS.map(s => ({ ...s, aprovado: true, _sheet: 'despesas', rowData: despRows.find(r => r[idx.id] === s.id) }));
+      document.getElementById('btnAprovarTodos').style.display = 'inline-flex';
+      document.getElementById('btnAplicar').style.display = 'inline-flex';
+      showIssue('desp_cat', reviewSuggestions);
+    };
 
     showIssue('sem_cat', reviewSuggestions);
 
@@ -1054,8 +1112,14 @@ function showIssue(type, sugestoes) {
   const list = sugestoes || reviewSuggestions;
 
   document.querySelectorAll('.issue-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('reviewTitle').textContent = type === 'sem_cat' ? 'Transações sem categoria' : 'Transações sem entidade';
+  const titles = { sem_cat: 'Transações sem categoria', sem_ent: 'Transações sem entidade', desp_cat: 'Despesas sem categoria' };
+  document.getElementById('reviewTitle').textContent = titles[type] || 'Revisão';
   document.getElementById('reviewSub').textContent = `${list.length} sugestões do Claude — revise e aprove`;
+
+  if (type === 'desp_cat' && !sugestoes) {
+    if (window._analisarDespesas) window._analisarDespesas();
+    return;
+  }
 
   if (!list.length) {
     document.getElementById('reviewContent').innerHTML = '<div class="empty-state"><div class="icon">✓</div><p>Nenhum problema encontrado nesta categoria!</p></div>';
@@ -1122,9 +1186,11 @@ async function aplicarSugestoes() {
     const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
     const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}`;
 
-    const sheetName = shCfg.trans || 'transacoes';
+    // Detect which sheet to update based on suggestions
+    const isDespesas = aprovadas.some(s => s._sheet === 'despesas');
+    const sheetName = isDespesas ? 'despesas' : (shCfg.trans || 'transacoes');
     // Get full sheet data
-    const dataResp = await fetch(`${baseUrl}/values/${encodeURIComponent(sheetName)}!A1:P2000`, { headers: { Authorization: 'Bearer ' + token } });
+    const dataResp = await fetch(`${baseUrl}/values/${encodeURIComponent(sheetName)}!A1:V2000`, { headers: { Authorization: 'Bearer ' + token } });
     const dataJson = await dataResp.json();
     const rows = dataJson.values || [];
     const hdrs = rows[0] || [];
@@ -1132,11 +1198,11 @@ async function aplicarSugestoes() {
     const idIdx  = hdrs.indexOf('ID_Transacao');
     if (idIdx === -1) throw new Error('Coluna ID_Transacao não encontrada');
 
-    // Colunas fixas conforme estrutura da planilha
-    // J=Categoria(9), K=Subcategoria(10), M=Entidade(12) — 0-based
-    const catIdx = hdrs.indexOf('Categoria') !== -1 ? hdrs.indexOf('Categoria') : 9;
-    const subIdx = hdrs.indexOf('Subcategoria') !== -1 ? hdrs.indexOf('Subcategoria') : 10;
-    const entIdx = hdrs.indexOf('Entidade') !== -1 ? hdrs.indexOf('Entidade') : 12;
+    // Colunas: transacoes J=9,K=10,M=12 | despesas E=4,F=5,H=8
+    const isDespUpdate = aprovadas.some(s => s._sheet === 'despesas');
+    const catIdx = hdrs.indexOf('Categoria') !== -1 ? hdrs.indexOf('Categoria') : (isDespUpdate ? 4 : 9);
+    const subIdx = hdrs.indexOf('Subcategoria') !== -1 ? hdrs.indexOf('Subcategoria') : (isDespUpdate ? 5 : 10);
+    const entIdx = hdrs.indexOf('Entidade') !== -1 ? hdrs.indexOf('Entidade') : (isDespUpdate ? 8 : 12);
 
     console.log('Headers:', hdrs);
     console.log(`catIdx=${catIdx}(${hdrs[catIdx]}), subIdx=${subIdx}(${hdrs[subIdx]}), entIdx=${entIdx}(${hdrs[entIdx]})`);
