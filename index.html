@@ -1196,8 +1196,11 @@ async function aplicarSugestoes() {
     const rows = dataJson.values || [];
     const hdrs = rows[0] || [];
 
-    const idIdx  = hdrs.indexOf('ID_Transacao');
-    if (idIdx === -1) throw new Error('Coluna ID_Transacao não encontrada');
+    // Suporta tanto transacoes (ID_Transacao) quanto despesas (ID_Despesa)
+    const isDespUpdate = aprovadas.some(s => s._sheet === 'despesas');
+    const idColName = isDespUpdate ? 'ID_Despesa' : 'ID_Transacao';
+    const idIdx = hdrs.indexOf(idColName);
+    if (idIdx === -1) throw new Error(`Coluna "${idColName}" não encontrada. Cabeçalhos: ${hdrs.join(', ')}`);
 
     // Descobre colunas pelo cabeçalho — funciona em qualquer aba automaticamente
     const catIdx = hdrs.indexOf('Categoria');
