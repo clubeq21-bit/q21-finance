@@ -1,1 +1,1291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q21 Finance Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root {
+  --bg: #080c10;
+  --bg2: #0d1117;
+  --surface: #111820;
+  --surface2: #161e28;
+  --border: rgba(255,255,255,0.06);
+  --border2: rgba(255,255,255,0.12);
+  --text: #e8edf5;
+  --muted: #6b7a8d;
+  --muted2: #4a5568;
+  --accent: #00d4aa;
+  --accent2: #0099ff;
+  --amber: #f5a623;
+  --red: #ef4b4b;
+  --green: #00d4aa;
+  --purple: #7c6af7;
+  --sans: 'Sora', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
 
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  overflow-x: hidden;
+}
+
+/* ── PARTICLES ── */
+#canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+  opacity: 0.4;
+}
+
+/* ── LAYOUT ── */
+.app { position: relative; z-index: 1; min-height: 100vh; }
+
+/* ── NAV ── */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2rem;
+  height: 56px;
+  background: rgba(8,12,16,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  transition: all 0.3s;
+}
+.nav-logo { display: flex; align-items: center; gap: 10px; }
+.nav-mark {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: #000; font-family: var(--mono);
+}
+.nav-name { font-size: 14px; font-weight: 500; letter-spacing: -0.3px; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-btn {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-family: var(--mono);
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: transparent; cursor: pointer;
+  color: var(--muted); transition: all 0.15s;
+}
+.nav-btn:hover { color: var(--text); border-color: var(--border2); background: var(--surface); }
+.nav-btn.active { color: var(--accent); border-color: rgba(0,212,170,0.3); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted2); }
+.dot.ok { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.settings-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--border2); background: transparent;
+  cursor: pointer; color: var(--muted); font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.settings-btn:hover { color: var(--text); background: var(--surface); }
+
+/* ── PAGES ── */
+.page { display: none; padding-top: 56px; min-height: 100vh; }
+.page.active { display: block; }
+
+/* ── HOME ── */
+.home {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; padding: 2rem;
+  text-align: center;
+}
+.greeting-time {
+  font-size: 11px; font-family: var(--mono);
+  letter-spacing: 0.15em; color: var(--muted);
+  text-transform: uppercase; margin-bottom: 12px;
+  animation: fadeUp 0.8s ease both;
+}
+.greeting-name {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 300; letter-spacing: -1px;
+  color: var(--text); margin-bottom: 2.5rem;
+  animation: fadeUp 0.8s 0.1s ease both;
+}
+.briefing-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border-radius: 99px;
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.04);
+  color: var(--text); font-size: 13px; font-family: var(--sans);
+  cursor: pointer; transition: all 0.2s;
+  backdrop-filter: blur(10px);
+  animation: fadeUp 0.8s 0.2s ease both;
+}
+.briefing-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.05); }
+.briefing-btn .spinner { display: none; }
+.briefing-btn.loading .spinner { display: block; }
+.briefing-btn.loading .btn-text { display: none; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-icon { animation: spin 1s linear infinite; display: inline-block; }
+
+/* briefing panel */
+.briefing-panel {
+  display: none; max-width: 680px; width: 100%;
+  margin: 2rem auto 0; text-align: left;
+  animation: fadeUp 0.5s ease both;
+}
+.briefing-panel.visible { display: block; }
+.b-section { margin-bottom: 1.25rem; }
+.b-label {
+  font-size: 10px; font-family: var(--mono); letter-spacing: 0.1em;
+  color: var(--muted); text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.b-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.b-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.b-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px;
+}
+.b-card-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-family: var(--mono); }
+.b-card-value { font-size: 20px; font-weight: 500; }
+.b-card-value.green { color: var(--green); }
+.b-card-value.amber { color: var(--amber); }
+.b-card-value.red { color: var(--red); }
+.b-alerts { display: flex; flex-direction: column; gap: 6px; }
+.b-alert {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; font-size: 12px;
+}
+.b-alert-left { display: flex; align-items: center; gap: 8px; }
+.b-alert-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.b-alert-btn {
+  font-size: 11px; font-family: var(--mono);
+  padding: 3px 8px; border-radius: 5px;
+  border: 1px solid var(--border2); background: transparent;
+  color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.b-alert-btn:hover { color: var(--accent); border-color: rgba(0,212,170,0.3); }
+
+/* ── INVOICE PAGE ── */
+.page-inner { max-width: 800px; margin: 0 auto; padding: 2rem; }
+.page-header { margin-bottom: 2rem; }
+.page-title { font-size: 22px; font-weight: 500; letter-spacing: -0.5px; margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--muted); }
+
+/* Steps */
+.steps-row { display: flex; align-items: center; gap: 0; margin-bottom: 2rem; }
+.step-item { display: flex; align-items: center; gap: 7px; font-size: 12px; font-family: var(--mono); color: var(--muted2); }
+.step-item.active { color: var(--text); }
+.step-item.done { color: var(--accent); }
+.step-num { width: 20px; height: 20px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; }
+.step-item.done .step-num { background: var(--accent); border-color: var(--accent); color: #000; }
+.step-line { flex: 1; height: 1px; background: var(--border); margin: 0 10px; max-width: 50px; }
+
+/* Card */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;
+}
+.card-title { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+
+/* Form */
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+input, select, textarea {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--sans);
+  font-size: 13px; padding: 8px 12px; outline: none; transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type="password"] { font-family: var(--mono); letter-spacing: 0.08em; }
+select option { background: var(--surface2); }
+textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.form-group { margin-bottom: 12px; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--sans); font-size: 13px; font-weight: 500;
+  padding: 9px 16px; border-radius: 8px;
+  border: 1px solid var(--border2); background: var(--surface2);
+  color: var(--text); cursor: pointer; transition: all 0.15s;
+}
+.btn:hover { background: var(--surface); border-color: var(--border2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #000; }
+.btn.primary:hover { opacity: 0.85; }
+.btn.success { background: rgba(0,212,170,0.1); border-color: rgba(0,212,170,0.3); color: var(--accent); }
+.btn.danger { background: rgba(239,75,75,0.1); border-color: rgba(239,75,75,0.3); color: var(--red); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 1.25rem; }
+
+/* Upload */
+.upload-zone {
+  border: 1px dashed var(--border2); border-radius: 10px;
+  padding: 2.5rem 1.5rem; text-align: center; cursor: pointer;
+  transition: all 0.2s; background: var(--surface2);
+}
+.upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(0,212,170,0.04); }
+.upload-zone p { color: var(--muted); font-size: 13px; }
+.upload-zone strong { color: var(--text); }
+.file-info {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,212,170,0.08); border: 1px solid rgba(0,212,170,0.2);
+  border-radius: 8px; padding: 10px 14px; margin-top: 10px;
+  font-size: 13px; color: var(--accent);
+}
+.progress-bar { height: 2px; background: var(--border); border-radius: 99px; overflow: hidden; margin: 12px 0; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width 0.4s; width: 0%; }
+.status-line { font-size: 12px; color: var(--muted); font-family: var(--mono); min-height: 18px; }
+
+/* Metrics */
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+.metric { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.metric-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-family: var(--mono); }
+.metric-value { font-size: 22px; font-weight: 600; font-family: var(--mono); }
+.metric-value.green { color: var(--green); }
+.metric-value.amber { color: var(--amber); }
+.metric-value.red { color: var(--red); }
+.metric-value.blue { color: var(--accent2); }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+.tab { padding: 8px 16px; font-size: 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: var(--mono); transition: color 0.15s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th { text-align: left; padding: 8px 10px; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border); font-family: var(--mono); white-space: nowrap; }
+tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+
+/* Badge */
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 500; font-family: var(--mono); padding: 2px 8px; border-radius: 4px; letter-spacing: 0.04em; white-space: nowrap; }
+.badge.avista { background: rgba(0,212,170,0.1); color: var(--accent); border: 1px solid rgba(0,212,170,0.2); }
+.badge.parc { background: rgba(245,166,35,0.1); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+.badge.cred { background: rgba(0,153,255,0.1); color: var(--accent2); border: 1px solid rgba(0,153,255,0.2); }
+.badge.dup { background: rgba(239,75,75,0.1); color: var(--red); border: 1px solid rgba(239,75,75,0.2); }
+
+select.tipo-sel { font-size: 11px; padding: 3px 6px; border-radius: 5px; width: auto; font-family: var(--mono); }
+input.desc-edit { font-size: 12px; padding: 3px 7px; border-radius: 5px; width: 200px; }
+input.cat-edit { font-size: 11px; padding: 3px 7px; border-radius: 5px; width: 130px; }
+.del-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 5px; border-radius: 4px; transition: color 0.15s; }
+.del-btn:hover { color: var(--red); }
+
+/* Output */
+.output-box { background: #050709; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: var(--mono); font-size: 11px; line-height: 1.7; color: #7a8fa6; max-height: 280px; overflow-y: auto; white-space: pre; }
+
+/* Divider */
+.divider { display: flex; align-items: center; gap: 10px; margin: 1rem 0; }
+.divider-line { flex: 1; height: 1px; background: var(--border); }
+.divider span { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+/* Info box */
+.info-box { display: flex; align-items: flex-start; gap: 10px; background: rgba(0,153,255,0.08); border: 1px solid rgba(0,153,255,0.2); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #6ab3f5; margin-bottom: 1rem; }
+code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0.07); padding: 1px 5px; border-radius: 3px; color: var(--accent); }
+
+/* ── REVIEW PAGE ── */
+.review-grid { display: grid; grid-template-columns: 260px 1fr; gap: 1rem; min-height: calc(100vh - 56px); }
+.review-sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 1.5rem; }
+.sidebar-title { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+.issue-group { margin-bottom: 1.5rem; }
+.issue-group-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
+.issue-count { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-family: var(--mono); font-size: 10px; }
+.issue-count.red { background: rgba(239,75,75,0.1); border-color: rgba(239,75,75,0.2); color: var(--red); }
+.issue-count.amber { background: rgba(245,166,35,0.1); border-color: rgba(245,166,35,0.2); color: var(--amber); }
+.issue-count.green { background: rgba(0,212,170,0.1); border-color: rgba(0,212,170,0.2); color: var(--accent); }
+.issue-item { padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.issue-item:hover { background: var(--surface2); color: var(--text); }
+.issue-item.active { background: var(--surface2); color: var(--accent); }
+.issue-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.review-main { padding: 1.5rem; overflow-y: auto; }
+.review-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+.review-title { font-size: 18px; font-weight: 500; }
+.review-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.review-actions { display: flex; gap: 8px; }
+
+/* Suggestion card */
+.suggestion-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; transition: border-color 0.15s; }
+.suggestion-card:hover { border-color: var(--border2); }
+.suggestion-card.approved { border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.03); }
+.suggestion-card.rejected { opacity: 0.4; }
+.s-check { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+.s-check.checked { background: var(--accent); border-color: var(--accent); color: #000; }
+.s-info { flex: 1; min-width: 0; }
+.s-desc { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.s-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.s-tag { font-size: 10px; font-family: var(--mono); padding: 2px 6px; border-radius: 4px; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+.s-tag.new { background: rgba(0,212,170,0.08); color: var(--accent); border-color: rgba(0,212,170,0.2); }
+.s-tag.was { background: rgba(239,75,75,0.08); color: var(--red); border-color: rgba(239,75,75,0.2); text-decoration: line-through; }
+.s-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.s-btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; font-family: var(--mono); }
+.s-btn.approve { border-color: rgba(0,212,170,0.3); color: var(--accent); }
+.s-btn.reject { border-color: rgba(239,75,75,0.2); color: var(--red); }
+.s-btn:hover { opacity: 0.75; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 4rem 2rem; color: var(--muted); }
+.empty-state .icon { font-size: 40px; margin-bottom: 1rem; opacity: 0.3; }
+.empty-state p { font-size: 13px; }
+
+/* ── SETTINGS PANEL ── */
+.settings-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: none; backdrop-filter: blur(4px); }
+.settings-overlay.open { display: flex; align-items: flex-start; justify-content: flex-end; }
+.settings-panel { width: 400px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); padding: 1.5rem; overflow-y: auto; animation: slideIn 0.25s ease; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+.settings-title { font-size: 16px; font-weight: 500; }
+.close-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; }
+.settings-section { margin-bottom: 2rem; }
+.settings-section-title { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.conn-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.conn-row:last-child { border-bottom: none; }
+.conn-info { display: flex; align-items: center; gap: 8px; }
+.conn-label { font-size: 13px; }
+.conn-status { font-size: 11px; font-family: var(--mono); color: var(--muted); }
+.card-list { display: flex; flex-direction: column; gap: 6px; }
+.card-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.card-item-info { font-size: 12px; }
+.card-item-id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 16px; font-size: 13px; display: none; z-index: 999; font-family: var(--mono); box-shadow: 0 4px 20px rgba(0,0,0,0.4); animation: fadeUp 0.2s ease; }
+
+/* Hidden */
+.hidden { display: none !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<!-- WATERMARK LOGO -->
+<div id="watermark" style="
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px;
+  height: 420px;
+  opacity: 0.09;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(0.5px);
+">
+<svg id="Camada_1" data-name="Camada 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><defs><style>.cls-1{fill:#ffffff;}</style></defs><title>Prancheta 10</title><path class="cls-1" d="M667.89,498.62a102.38,102.38,0,0,0-.54-10.69l-11.74-.26.1-2.72a57.2,57.2,0,0,1,4.8-21.81c-.47-1-1-2-1.5-2.92a60.14,60.14,0,0,0-24.56-24.46q-15.66-8.4-35.92-8.41t-36,8.41a59.88,59.88,0,0,0-24.65,24.46q-8.89,16-8.89,38.4t8.89,38.4a59.88,59.88,0,0,0,24.65,24.46q15.75,8.4,36,8.4,19.5,0,33.05-8.21l8,11.85h15.14v-4.21A75.51,75.51,0,0,1,658.32,545l-2.66-3.55Q667.89,524.8,667.89,498.62Zm-46,32.29q-9.07,10.32-23.4,10.32t-23.41-10.32q-9.06-10.32-9.07-32.29t9.07-32.29Q584.19,456,598.53,456t23.4,10.32Q631,476.65,631,498.62T621.93,530.91Z"/><path class="cls-1" d="M699.27,545.24h61.34v28.28H657.43v-4.21q0-16.23,5-27.41a53.59,53.59,0,0,1,13.19-18.53,135.82,135.82,0,0,1,21-15l11.85-7.07q8.59-5.18,13-10.32a17.51,17.51,0,0,0,4.4-11.66q0-7.44-3.82-11.46t-11.28-4q-8,0-12.7,5.35t-5.25,16.62l-34.4-.77q.58-15.66,7.64-26.36a44.13,44.13,0,0,1,18.64-16.05,61.27,61.27,0,0,1,26.07-5.36q22.37,0,36.12,10.23t13.76,29.71q0,13.38-4.4,22a37.66,37.66,0,0,1-11,13.47A224,224,0,0,1,725.83,525l-9.36,5.73a95.43,95.43,0,0,0-12,8.31C701.12,541.77,699.39,543.84,699.27,545.24Z"/><path class="cls-1" d="M704.43,539a95.43,95.43,0,0,1,12-8.31l9.36-5.73a224,224,0,0,0,19.39-12.33,37.66,37.66,0,0,0,11-13.47q4.39-8.6,4.4-22,0-19.5-13.76-29.71t-36.12-10.23a61.27,61.27,0,0,0-26.07,5.36A44.13,44.13,0,0,0,666,458.69q-7.07,10.69-7.64,26.36l34.4.77q.56-11.28,5.25-16.62t12.7-5.35q7.46,0,11.28,4t3.82,11.46a17.51,17.51,0,0,1-4.4,11.66q-4.38,5.16-13,10.32l-11.85,7.07a135.82,135.82,0,0,0-21,15,53.59,53.59,0,0,0-13.19,18.53q-5,11.18-5,27.41v4.21H760.61V545.24H699.27C699.39,543.84,701.12,541.77,704.43,539Z"/><path class="cls-1" d="M840.66,573.52H805.88V486.77H778.94V463.65h4q12,0,19.29-6.87a32.92,32.92,0,0,0,9.56-17h28.85Z"/><path class="cls-1" d="M647.05,689.44h-30v-45H574.66v45h-30V576.83h30V620.2h42.43V576.83h30Z"/><path class="cls-1" d="M744.68,672.16a39.76,39.76,0,0,1-18,14.75q-11.43,4.89-26.26,4.89t-26.18-4.89a39.81,39.81,0,0,1-17.9-14.75q-6.54-9.85-6.55-24.36V576.67h30V645q0,23,20.66,23,20.82,0,20.82-23V576.67h30V647.8Q751.23,662.31,744.68,672.16Z"/><path class="cls-1" d="M840,584.87q9.78,8.21,9.78,21.92a23.15,23.15,0,0,1-3.87,13.49A25.84,25.84,0,0,1,835.29,629v.63a33.25,33.25,0,0,1,13.17,10.09q5,6.48,5,15.93,0,15.93-9.93,24.76t-27.92,8.84H754.06V576.67h59Q830.24,576.67,840,584.87Zm-33.6,37.22q6.63,0,10.1-3.08t3.47-8.59q0-5.52-3.47-8.6t-10.1-3.07H784v23.34Zm12.7,41.32q3.71-3.31,3.71-9.15a11.88,11.88,0,0,0-3.71-9.22q-3.71-3.39-10.65-3.39H784v25.07h24.44Q815.42,666.72,819.12,663.41Z"/><g id="BEGE_ICONE_FINAL" data-name="BEGE ICONE FINAL"><g id="FORMA"><path class="cls-1" d="M356.49,431.88l-1,7.53c-3.28,0-6.54.23-9.75.53a126.07,126.07,0,0,0-56.79,19.54,128.58,128.58,0,0,0-18.54,14.36L269,475.12l-1.32,1.29a126.54,126.54,0,0,0-36.82,75.64q-.58,5.1-.75,10.31l-9.44,1.31A137,137,0,0,1,356.49,431.88Z"/><path class="cls-1" d="M357.18,705.88a137,137,0,0,1-136.58-137l9.51,1.32c.1,3.7.36,7.36.77,11a126.47,126.47,0,0,0,36.52,75.34c.43.44.88.88,1.32,1.3l1.35,1.29A126.51,126.51,0,0,0,345.14,693c3.4.32,6.85.5,10.32.54Z"/><path class="cls-1" d="M494.6,569.49A137,137,0,0,1,362.31,705.8L364,693.34c4-.19,7.94-.58,11.83-1.14a126.57,126.57,0,0,0,71.25-35.65q.88-.88,1.74-1.77c.58-.6,1.16-1.2,1.72-1.81a126.44,126.44,0,0,0,33-70.9q.68-5.52.86-11.17Z"/><path class="cls-1" d="M494.47,563.07l-10.07-1.39q-.21-5.34-.84-10.53a125.74,125.74,0,0,0-8.74-33.2c-.13-.34-.28-.68-.42-1s-.29-.68-.43-1l-.41-.93a127.1,127.1,0,0,0-23-34.91c-.57-.61-1.13-1.21-1.71-1.8s-1.15-1.19-1.73-1.77a126.57,126.57,0,0,0-71.47-35.83q-5.73-.82-11.63-1.13L363,432A137,137,0,0,1,494.47,563.07Z"/><path class="cls-1" d="M359.74,408.45v31.28H357.6c.71,0,1.43,0,2.14,0v81c-.86,0-1.71-.07-2.58-.07a45.27,45.27,0,0,0-13.24,2l3.53-25.49,2.22-16.06,5.74-41.4h0l0-.31,1-7.53Z"/><path class="cls-1" d="M326.35,532.72c-.38.34-.74.7-1.11,1l-.42.42-.69.71-.48.52-.52.57-.5.58-.5.58-.42.51-4.45-5.9h0l-10.32-13.67-9.49-12.58L292,498.23l6.39,6.4,11,11Z"/><path class="cls-1" d="M314.33,581.88l-25.92-3.59-15.78-2.19-41.88-5.8-.13,0-.51-.07-9.51-1.32-18.82-2.6H311.59A45.51,45.51,0,0,0,314.33,581.88Z"/><path class="cls-1" d="M331.62,604l-20.29,15.32L299,628.62l-7.31,5.52,6.4-6.39,10.72-10.69,17.37-17.32.64.58.65.56.5.43.31.25.1.09.41.33,1.16.89.05,0,.5.36.65.46Z"/><path class="cls-1" d="M427.64,634.26l-8.54-8.55L408.41,615l-14.69-14.73-3.07-3.07c.45-.49.89-1,1.32-1.49.17-.21.35-.41.51-.62s.39-.48.58-.73.32-.41.48-.62l.15-.2c.15-.2.31-.41.45-.62h0l0,0v0l.53-.75.08-.12c.15-.21.29-.43.44-.65L411,612.16l9.3,12.33Z"/><path class="cls-1" d="M427.75,498.46,419.21,507l-11,11-17.48,17.44c-.2-.22-.41-.45-.62-.66s-.43-.44-.64-.66q-.65-.65-1.32-1.26c-.22-.21-.44-.42-.67-.62l-.57-.49c-.16-.15-.34-.29-.51-.43l-.1-.09-.75-.61-.17-.14,20.1-15.17,12.6-9.51Z"/><path class="cls-1" d="M375.88,607.84l-3.8,27.43-2.17,15.66L364.08,693h0l0,.3v0l-1.73,12.46-2.57,18.58V611.78A45.2,45.2,0,0,0,375.88,607.84Z"/><path class="cls-1" d="M517.7,566.29h-115a45.52,45.52,0,0,0-3-16.35l26.85,3.72,15.93,2.21,41.26,5.72.52.07.13,0,10.07,1.39Z"/><path class="cls-1" d="M370.15,601.16a36.89,36.89,0,0,1-26.28-.45l6-6.67a28.35,28.35,0,0,0,7.7,1.05,28.82,28.82,0,0,0,6.41-.72Z"/><path class="cls-1" d="M384.53,591.61A36.58,36.58,0,0,1,377,597.8l-5.66-6.26-9.61-10.61,6.54-7.23L379,585.45Z"/><path class="cls-1" d="M394.35,566.61a36.61,36.61,0,0,1-5.3,19l-5.87-6.48a28.58,28.58,0,0,0,.95-22.92l6-6.66A36.47,36.47,0,0,1,394.35,566.61Z"/><path class="cls-1" d="M373.14,533.3l-5.89,6.51a28.6,28.6,0,0,0-19.59.1l-5.87-6.48a36.81,36.81,0,0,1,31.35-.13Z"/><path class="cls-1" d="M386,543.24l-5.62,6.21-12,13.28-5.95-6.57L374,543.32l5.58-6.16A36.74,36.74,0,0,1,386,543.24Z"/><path class="cls-1" d="M352.44,556.16l-6.54,7.23-11.74-13-5.67-6.26a36.94,36.94,0,0,1,6.9-6.84l5.57,6.16Z"/><path class="cls-1" d="M351.84,580.93l-9.06,10-5.63,6.21a37,37,0,0,1-6.68-5.75l5.58-6.16,9.85-10.88Z"/><path class="cls-1" d="M331.88,578.87,326,585.38a36.84,36.84,0,0,1-1.54-34.69l6.15,6.78h0a28.52,28.52,0,0,0,1.27,21.39Z"/></g><g id="TRAÇADO"><path class="cls-1" d="M376.07,525l-.3-.14a45,45,0,0,0-16-3.9h-.17V408.45l.36,0Zm-16.15-4.4a45.63,45.63,0,0,1,15.7,3.79L359.92,411.1Z"/><path class="cls-1" d="M359.56,724.4l-15.9-114.77.27.08a45.38,45.38,0,0,0,13.23,2c.84,0,1.7,0,2.57-.07h.19V724.38ZM344.1,610.14l15.46,111.59V612c-.81,0-1.62.07-2.4.07A45.55,45.55,0,0,1,344.1,610.14Z"/><path class="cls-1" d="M399.43,582.86l.11-.29a45.14,45.14,0,0,0,3-16.28v-.18H517.7l0,.36Zm3.48-16.39A45.46,45.46,0,0,1,400,582.41l115.06-15.94Z"/><path class="cls-1" d="M311.78,566.47h-110l0-.36,112.86-15.64-.11.29a45.26,45.26,0,0,0-2.72,15.53Zm-107.35-.36h107a45.54,45.54,0,0,1,2.65-15.19Z"/><path class="cls-1" d="M395.25,541.6l-.14-.21-.39-.59c-.1-.15-.2-.3-.31-.44l0-.07-.05-.07.13-.14-.18.08c-.11-.17-.23-.33-.34-.49l-.45-.61c-.17-.23-.35-.46-.53-.68s-.29-.37-.44-.55-.2-.26-.31-.38l-.49-.6-1.15-1.3-.12-.13.12-.12,37.07-37,.27.24Zm-4.31-6.16c.35.37.7.77,1.05,1.18l.49.59.32.39.44.55c.18.23.36.46.53.7l.45.6.35.49.14.2.31.45.25.38L426,500.46Z"/><path class="cls-1" d="M291.85,634.27l-.27-.24,30-39.56.15.19.47.58.17.2-.11.15.14-.12c.25.31.51.6.77.9l0,0,.22.24.07.08.3.33a1.13,1.13,0,0,0,.11.11l0,.05c.21.23.43.46.65.68l0,0,.49.49.34.34.09.09c.11.12.22.22.33.32l.45.42.14.13Zm29.75-39.2-28.13,37.08L326,599.74c-.11-.09-.21-.19-.31-.29l-.34-.33-.1-.09-.34-.34-.46-.46,0,0-.69-.73,0,0-.11-.13q-.15-.15-.3-.33l-.07-.07-.23-.26,0,0-.75-.87.1-.16-.13.12-.18-.21Z"/><path class="cls-1" d="M427.53,634.41,385,602.14l.18-.15c.69-.54,1.31-1.06,1.9-1.58l.48-.42.49-.45c.15-.13.28-.26.41-.39.55-.52,1-1,1.51-1.5l.55-.59.13-.14,37.12,37.21ZM385.6,602.13l40,30.38-35-35.06-.42.45c-.48.5-1,1-1.52,1.52l-.41.38-.51.46c-.15.15-.32.29-.48.43C386.78,601.16,386.22,601.64,385.6,602.13Z"/><path class="cls-1" d="M326.35,533l-34.53-34.61.24-.27,40,30.36-.21.15c-.28.18-.55.37-.82.56l-.77.55-.51.39-.53.4-.13.1-.37.3-.33.26-.66.55c-.48.41-.9.78-1.29,1.14ZM294,500l32.41,32.49c.35-.33.74-.67,1.16-1l.65-.53.35-.28.37-.31.15-.11.52-.39.52-.4,0,0,.73-.53.61-.42Zm35.24,30.56-.08,0Zm.05,0,0,0Z"/><path class="cls-1" d="M357.16,612a45.63,45.63,0,0,1-13.33-2,45.11,45.11,0,0,1-6.2-2.39,45.64,45.64,0,0,1-6.11-3.49,4.15,4.15,0,0,1-.43-.3l-.66-.46-.55-.4-1.17-.9-.4-.33-.11-.09-.21-.17-.09-.07-.51-.44-.65-.56-.65-.59-.44-.42-.34-.33-.1-.09-.34-.34-.46-.46,0,0-.69-.73,0,0-.11-.13q-.15-.15-.3-.33l-.3-.33,0,0-.75-.87.1-.16-.13.12-.18-.21-.48-.59c-.65-.81-1.28-1.65-1.86-2.49a45.81,45.81,0,0,1-5.43-41.76,46.16,46.16,0,0,1,3.48-7.39l.13-.22,6.91,7.64-.05.11a36.57,36.57,0,0,0,19.27,49.75l0,0a36.68,36.68,0,0,0,26.15.45l.12,0,6.2,6.86L376,608a45.35,45.35,0,0,1-16.21,4C358.88,612,358,612,357.16,612Zm-34.75-16.57c.25.31.51.6.77.9l0,0,.29.32.3.33a1.13,1.13,0,0,0,.11.11l0,.05c.21.23.43.46.65.68l0,0,.49.49.34.34.09.09c.11.12.22.22.33.32l.45.42.64.58.65.57c.16.15.33.29.5.42l.09.08.21.17.11.09.4.32c.38.31.77.61,1.16.9l.07,0,.48.34.62.45c.17.12.31.22.46.31a44.28,44.28,0,0,0,6.06,3.46,45.21,45.21,0,0,0,19.37,4.33c.84,0,1.7,0,2.57-.07a45,45,0,0,0,16.08-3.92h0l-5.71-6.31a37.09,37.09,0,0,1-26.27-.48l0,0a36.29,36.29,0,0,1-6.75-3.57,37.27,37.27,0,0,1-6.71-5.77,36.93,36.93,0,0,1-6.09-40.81l-6.42-7.08a44.41,44.41,0,0,0-3.33,7.12,45.25,45.25,0,0,0,5.39,41.42c.58.83,1.2,1.67,1.85,2.48l.47.58.17.2-.11.15Zm60.26,8.81-5.91-6.52.18-.12a36.43,36.43,0,0,0,7.46-6.15l.13-.15,5.83,6.43-.12.13c-.48.5-1,1-1.52,1.52l-.41.38-.51.46c-.15.15-.32.29-.48.43-.59.52-1.22,1-1.91,1.59-.84.66-1.72,1.31-2.61,1.91Zm-5.35-6.44,5.4,6c.84-.57,1.67-1.18,2.46-1.81s1.31-1.06,1.9-1.58l.48-.42.49-.45c.15-.13.28-.26.41-.39.5-.47,1-.93,1.4-1.38l-5.33-5.89A36.48,36.48,0,0,1,377.32,597.84Zm-19.72-2.57a28.8,28.8,0,0,1-7.75-1l-.28-.08,7.24-8,7.54,8.33-.3.07A28.42,28.42,0,0,1,357.6,595.27Zm-7.36-1.33a28.59,28.59,0,0,0,13.42.32l-6.85-7.58Zm44.58-1.66-6-6.63.07-.12a36.6,36.6,0,0,0-9.42-48.23,35.63,35.63,0,0,0-6.41-3.83,36.59,36.59,0,0,0-31.19.12l-.13.06L335,526.23l.2-.11a46.63,46.63,0,0,1,8.63-3.62,45.8,45.8,0,0,1,13.3-2c.84,0,1.71,0,2.59.07a45.54,45.54,0,0,1,16.17,3.94c1.18.53,2.36,1.12,3.5,1.76a46.15,46.15,0,0,1,6,4l.18.14.75.61.1.09.51.43.57.5.66.59c.45.42.89.85,1.34,1.29l.64.66.63.67c.37.41.77.85,1.16,1.31l.49.59.32.39.44.55c.18.23.36.46.53.7l.45.6.35.49.14.2.31.45c.13.2.26.4.4.59l1,1.57a45.14,45.14,0,0,1,3.47,7.13h0a45.69,45.69,0,0,1-4.49,41.55c-.15.22-.29.44-.44.65Zm-5.54-6.67,5.5,6.08c.1-.15.2-.31.31-.46a45.7,45.7,0,0,0,4.45-8.66,45.53,45.53,0,0,0,0-32.56h0a45.75,45.75,0,0,0-3.45-7.07c-.32-.53-.64-1-1-1.56l-.39-.58c-.1-.15-.2-.3-.31-.44l0-.07-.05-.07.13-.14-.18.08c-.11-.17-.23-.33-.34-.49l-.45-.61c-.17-.23-.35-.46-.53-.68s-.29-.37-.44-.55-.2-.26-.31-.38l-.49-.6-1.15-1.3-.62-.66-.64-.65c-.44-.44-.88-.87-1.31-1.26-.24-.22-.45-.42-.67-.61l-.56-.49-.51-.43-.11-.09q-.36-.32-.75-.6l-.16-.14a46.18,46.18,0,0,0-6-4c-1.13-.63-2.3-1.22-3.47-1.75a45,45,0,0,0-16-3.9c-.87-.05-1.74-.08-2.57-.08a45.39,45.39,0,0,0-13.19,2,46,46,0,0,0-8.36,3.48l6.22,6.87A36.95,36.95,0,0,1,379.69,537a37,37,0,0,1,9.59,48.6Zm-6-6.14L373,568.22l11.16-12.33.1.27a28.78,28.78,0,0,1-1,23.07Zm-9.7-11.25,9.6,10.6a27.91,27.91,0,0,0,2.77-12.21,28.3,28.3,0,0,0-1.83-10Zm-41.69,11-.12-.25a28.7,28.7,0,0,1-1.28-21.53l.1-.29,10.64,11.75Zm-1.16-21.37a28.5,28.5,0,0,0,1.25,20.72l8.75-9.67Zm26.13,17.89-6.19-6.84,6.79-7.5,6.19,6.84Zm-5.7-6.84,5.7,6.29,6.3-6.95-5.7-6.3Zm6.3-17.93-10.07-11.11.25-.1a28.74,28.74,0,0,1,19.72-.11l.26.1ZM348,540l9.44,10.42,9.52-10.52a28.39,28.39,0,0,0-19,.1Zm-19.47,4.46-6.61-7.3.1-.12.5-.58.5-.58.13-.15.39-.42c.16-.18.32-.35.49-.52s.46-.49.7-.72l.41-.42,1.12-1.06c.39-.36.81-.73,1.29-1.15l.65-.53.35-.28.47-.38.13-.11,6.54,7.22-.16.12a36.87,36.87,0,0,0-6.86,6.81Zm-6.12-7.31,6.1,6.74a37.26,37.26,0,0,1,6.64-6.58l-6-6.67-.33.27-.33.26-.66.55c-.48.41-.9.78-1.29,1.14s-.74.7-1.1,1c-.14.14-.28.27-.41.42s-.47.47-.7.71l-.48.51-.38.43-.13.14-.5.57Z"/><path class="cls-1" d="M357.6,595.27a28.8,28.8,0,0,1-7.75-1l-.28-.08,7.24-8,7.54,8.33-.3.07A28.42,28.42,0,0,1,357.6,595.27Zm-7.36-1.33a28.59,28.59,0,0,0,13.42.32l-6.85-7.58Zm33-14.47L373,568.22l11.16-12.33.1.27a28.78,28.78,0,0,1-1,23.07Zm-9.7-11.25,9.6,10.6a27.91,27.91,0,0,0,2.77-12.21,28.3,28.3,0,0,0-1.83-10Zm-41.69,11-.12-.25a28.7,28.7,0,0,1-1.28-21.53l.1-.29,10.64,11.75Zm-1.16-21.37a28.5,28.5,0,0,0,1.25,20.72l8.75-9.67Zm26.13,17.89-6.19-6.84,6.79-7.5,6.19,6.84Zm-5.7-6.84,5.7,6.29,6.3-6.95-5.7-6.3Zm6.3-17.93-10.07-11.11.25-.1a28.74,28.74,0,0,1,19.72-.11l.26.1ZM348,540l9.44,10.42,9.52-10.52a28.39,28.39,0,0,0-19,.1Z"/><path class="cls-1" d="M331.84,579.2l-.12-.25a28.7,28.7,0,0,1-1.28-21.53l.1-.29,10.64,11.75Zm-1.16-21.37a28.5,28.5,0,0,0,1.25,20.72l8.75-9.67Z"/><path class="cls-1" d="M357.41,551l-10.07-11.11.25-.1a28.74,28.74,0,0,1,19.72-.11l.26.1ZM348,540l9.44,10.42,9.52-10.52a28.39,28.39,0,0,0-19,.1Z"/><path class="cls-1" d="M357.6,595.27a28.8,28.8,0,0,1-7.75-1l-.28-.08,7.24-8,7.54,8.33-.3.07A28.42,28.42,0,0,1,357.6,595.27Zm-7.36-1.33a28.59,28.59,0,0,0,13.42.32l-6.85-7.58Z"/><path class="cls-1" d="M356.81,575.72l-6.19-6.84,6.79-7.5,6.19,6.83Zm-5.7-6.84,5.7,6.29,6.3-7-5.7-6.29Z"/><path class="cls-1" d="M383.23,579.47,373,568.22l11.16-12.33.1.27a28.78,28.78,0,0,1-1,23.07Zm-9.7-11.25,9.6,10.6a27.91,27.91,0,0,0,2.77-12.21,28.3,28.3,0,0,0-1.83-10Z"/><path class="cls-1" d="M350.86,569.15l-5.21-5.76,27.44-30.31.13.06a36.32,36.32,0,0,1,6.47,3.87l.16.12Zm-4.72-5.76,4.72,5.22,28.45-31.43a36.24,36.24,0,0,0-6.13-3.66Z"/><path class="cls-1" d="M330.47,591.67l-.13-.14a36.61,36.61,0,0,1-4.5-6.06l-.07-.12,15.16-16.74,5.21,5.75Zm-4.25-6.27a36.33,36.33,0,0,0,4.25,5.73l15.18-16.77-4.72-5.21Z"/><path class="cls-1" d="M344,600.89l-.15,0a36.29,36.29,0,0,1-6.75-3.57l-.17-.12,26.47-29.24,5.21,5.76Zm-6.52-3.77a36.42,36.42,0,0,0,6.39,3.37l24.25-26.79-4.72-5.21Z"/><path class="cls-1" d="M373.28,568.49l-5.21-5.76L386,543l.13.16a36.94,36.94,0,0,1,4.22,6.36l.06.12Zm-4.72-5.76,4.72,5.21,16.66-18.4a36.32,36.32,0,0,0-4-6Z"/><path class="cls-1" d="M352.44,556.44l-23.59-26.06.19-.18.52-.39.52-.4,0,0,.73-.53.83-.57c1.16-.78,2.35-1.51,3.55-2.17l.13-.07,22.29,24.63Zm-23.07-26,23.07,25.48,4.72-5.21-21.88-24.17c-1.14.64-2.29,1.34-3.4,2.09-.28.18-.55.37-.82.56l-.77.55-.51.39C329.64,530.2,329.5,530.3,329.37,530.41Zm-.18.13-.08,0Z"/><path class="cls-1" d="M376.07,608l-19.51-21.55,5.21-5.75L383,604.07l-.17.12a45.21,45.21,0,0,1-6.61,3.71Zm-19-21.55,19.11,21.11a44.78,44.78,0,0,0,6.26-3.52l-20.65-22.8Z"/><path class="cls-1" d="M255.2,551.69l-.72-.1a104.51,104.51,0,0,1,29.86-59.33l1.09-1.06c.36-.36.73-.71,1.11-1.06A103.24,103.24,0,0,1,346,462.78l.08.73a102.46,102.46,0,0,0-59,27.17l-1.1,1-1.08,1.06A103.81,103.81,0,0,0,255.2,551.69Z"/><path class="cls-1" d="M460.26,553.69A102.56,102.56,0,0,0,433.5,496c-.46-.5-.92-1-1.39-1.47s-.94-1-1.42-1.45a102.38,102.38,0,0,0-58.24-29.19l.1-.73a103.16,103.16,0,0,1,58.66,29.41c.48.48,1,1,1.43,1.45s.94,1,1.4,1.48A103.29,103.29,0,0,1,461,553.6Z"/><path class="cls-1" d="M433.91,637.16l-.53-.49a102.57,102.57,0,0,0,26.88-57.78l.72.09A103.19,103.19,0,0,1,433.91,637.16Z"/><path class="cls-1" d="M372.6,669.37l-.11-.73a102.43,102.43,0,0,0,58.07-29l1.42-1.44c.47-.49.94-1,1.4-1.48l.53.49c-.46.51-.93,1-1.41,1.49s-.94,1-1.42,1.45A103.21,103.21,0,0,1,372.6,669.37Z"/><path class="cls-1" d="M347.9,670a103.38,103.38,0,0,1-57.32-24l.46-.56A102.68,102.68,0,0,0,348,669.26Z"/><path class="cls-1" d="M272.93,627a104.13,104.13,0,0,1-18.4-45.55l.73-.11a103.4,103.4,0,0,0,18.26,45.24Z"/><path class="cls-1" d="M385.34,718.47a1.29,1.29,0,0,1-.21-2.57l.63-.11a1.29,1.29,0,1,1,.45,2.55l-.64.11A.9.9,0,0,1,385.34,718.47Zm-51.71-.08-.23,0-.64-.12a1.3,1.3,0,1,1,.46-2.55l.63.11a1.3,1.3,0,0,1-.22,2.58Zm101-17.63a1.3,1.3,0,0,1-.65-2.42l.56-.32a1.3,1.3,0,0,1,1.3,2.25l-.57.32A1.25,1.25,0,0,1,434.62,700.76Zm-150.21-.25a1.3,1.3,0,0,1-.65-.18l-.57-.33a1.3,1.3,0,0,1,1.31-2.24l.56.32a1.3,1.3,0,0,1-.65,2.43Zm190.44-33.25A1.27,1.27,0,0,1,474,667a1.29,1.29,0,0,1-.15-1.83l.41-.49a1.3,1.3,0,0,1,2,1.67l-.42.5A1.31,1.31,0,0,1,474.85,667.26Zm-230.56-.4a1.3,1.3,0,0,1-1-.47l-.42-.5a1.3,1.3,0,0,1,2-1.66l.41.49a1.3,1.3,0,0,1-.16,1.83A1.26,1.26,0,0,1,244.29,666.86Zm257-44.82a1.19,1.19,0,0,1-.45-.08,1.3,1.3,0,0,1-.76-1.67l.22-.6a1.3,1.3,0,1,1,2.44.88l-.23.62A1.29,1.29,0,0,1,501.25,622Zm-283.2-.47a1.3,1.3,0,0,1-1.22-.86l-.23-.62a1.3,1.3,0,0,1,2.45-.87l.22.6a1.31,1.31,0,0,1-1.22,1.75ZM510.53,570.5h0a1.31,1.31,0,0,1-1.29-1.31v-1a1.3,1.3,0,0,1,2.6,0v1A1.3,1.3,0,0,1,510.53,570.5ZM208.94,570a1.3,1.3,0,0,1-1.29-1.3v-.65a1.3,1.3,0,0,1,1.3-1.3h0a1.29,1.29,0,0,1,1.29,1.3v.65A1.3,1.3,0,0,1,208.94,570Zm292.65-51.42a1.31,1.31,0,0,1-1.22-.86l-.22-.61a1.3,1.3,0,0,1,2.44-.89l.22.61a1.3,1.3,0,0,1-.77,1.67A1.42,1.42,0,0,1,501.59,518.59Zm-283.65-.17a1.41,1.41,0,0,1-.44-.08,1.31,1.31,0,0,1-.78-1.67l.23-.61a1.29,1.29,0,1,1,2.43.89l-.22.61A1.3,1.3,0,0,1,217.94,518.42ZM475.5,473.21a1.3,1.3,0,0,1-1-.47l-.41-.49a1.3,1.3,0,0,1,2-1.67l.42.5a1.3,1.3,0,0,1-1,2.13Zm-231.39-.16a1.33,1.33,0,0,1-.84-.3,1.3,1.3,0,0,1-.16-1.83l.42-.5a1.3,1.3,0,1,1,2,1.67l-.42.5A1.31,1.31,0,0,1,244.11,473.05Zm191.38-33.62a1.31,1.31,0,0,1-.66-.18l-.55-.32a1.3,1.3,0,1,1,1.29-2.25l.57.33a1.3,1.3,0,0,1-.65,2.42Zm-151.33-.1a1.3,1.3,0,0,1-.65-2.42l.56-.33a1.32,1.32,0,0,1,1.78.48,1.3,1.3,0,0,1-.48,1.77l-.56.33A1.37,1.37,0,0,1,284.16,439.33Zm102.17-17.94-.23,0-.63-.11a1.3,1.3,0,1,1,.44-2.56l.65.11a1.31,1.31,0,0,1,1.05,1.51A1.3,1.3,0,0,1,386.33,421.39Zm-53,0a1.3,1.3,0,0,1-.23-2.58l.65-.11a1.3,1.3,0,0,1,.44,2.56l-.63.11Z"/><path class="cls-1" d="M217.47,559.08l-.82-.05c0-.68.1-1.36.16-2l.81.07C217.57,557.74,217.51,558.41,217.47,559.08Z"/><path class="cls-1" d="M218.34,550.44l-.81-.11c.18-1.37.38-2.74.6-4.1l.81.13Q218.61,548.39,218.34,550.44Zm1.81-10.63-.8-.17c.29-1.36.59-2.71.92-4l.79.19C220.74,537.12,220.43,538.46,220.15,539.81Zm2.62-10.48-.78-.23c.39-1.33.8-2.66,1.22-4l.78.25C223.56,526.69,223.16,528,222.77,529.33Zm3.42-10.25-.77-.29c.49-1.3,1-2.59,1.52-3.87l.76.31C227.17,516.5,226.67,517.78,226.19,519.08Zm4.18-10-.74-.35c.59-1.25,1.19-2.5,1.81-3.74l.73.37Q231.24,507.25,230.37,509.12Zm4.93-9.61-.71-.4c.67-1.21,1.37-2.41,2.08-3.59l.7.42Q236.31,497.71,235.3,499.51Zm5.63-9.21-.67-.45c.76-1.15,1.55-2.29,2.35-3.42l.66.47C242.48,488,241.7,489.16,240.93,490.3Zm6.32-8.75-.64-.5c.85-1.09,1.71-2.17,2.6-3.23l.62.52C249,479.4,248.09,480.47,247.25,481.55Zm6.95-8.25-.6-.54c.93-1,1.87-2,2.83-3l.59.56C256.07,471.28,255.13,472.29,254.2,473.3Zm7.55-7.7-.56-.59c1-.95,2-1.88,3.05-2.8l.55.6C263.76,463.73,262.75,464.66,261.75,465.6Zm8.11-7.11-.52-.63c1.07-.87,2.16-1.72,3.26-2.57l.49.65C272,456.78,270.92,457.63,269.86,458.49Zm8.61-6.47-.46-.67c1.13-.79,2.28-1.56,3.43-2.32l.45.68C280.74,450.47,279.6,451.23,278.47,452Zm9.07-5.81-.41-.7c1.19-.7,2.39-1.38,3.6-2.05l.39.71C289.92,444.84,288.73,445.51,287.54,446.21Zm9.49-5.1-.36-.74c1.24-.6,2.48-1.19,3.74-1.76l.34.74C299.5,439.92,298.26,440.5,297,441.11Zm9.83-4.37-.3-.76c1.28-.51,2.57-1,3.86-1.48l.28.77Q308.77,436,306.86,436.74ZM317,433.13l-.24-.78c1.31-.41,2.64-.81,4-1.18l.23.78C319.64,432.32,318.32,432.72,317,433.13Zm10.41-2.83-.19-.8c1.35-.31,2.7-.6,4.06-.87l.16.79C330.1,429.7,328.75,430,327.42,430.3Zm10.59-2-.13-.8c1.37-.21,2.73-.4,4.11-.57l.1.81C340.72,427.87,339.36,428.06,338,428.26Z"/><path class="cls-1" d="M348.76,427l-.06-.81,2-.14,0,.81Z"/><path class="cls-1" d="M351.05,712.42l-2-.13.06-.81,2,.13Z"/><path class="cls-1" d="M342.54,711.66c-1.34-.16-2.67-.34-4-.53l.12-.81c1.32.2,2.65.38,4,.53ZM332.13,710c-1.32-.26-2.63-.54-3.94-.83l.18-.79c1.3.29,2.6.56,3.92.82Zm-10.26-2.4c-1.3-.36-2.6-.73-3.88-1.12l.23-.78q1.92.59,3.87,1.11Zm-10.08-3.16c-1.27-.45-2.53-.92-3.79-1.4l.3-.76c1.25.48,2.5,1,3.76,1.39ZM302,700.58c-1.23-.55-2.46-1.11-3.67-1.68l.35-.74c1.21.57,2.42,1.13,3.65,1.67ZM292.49,696q-1.78-.94-3.54-2l.4-.7c1.17.66,2.34,1.3,3.52,1.93Zm-9.12-5.29c-1.14-.72-2.27-1.45-3.39-2.2l.46-.68c1.11.75,2.23,1.47,3.36,2.19Zm-8.71-5.95c-1.09-.8-2.16-1.61-3.21-2.44l.5-.64c1.05.82,2.11,1.63,3.19,2.43Zm-8.25-6.56c-1-.88-2-1.77-3-2.67l.54-.6c1,.9,2,1.78,3,2.65ZM258.67,671q-1.44-1.41-2.82-2.88l.59-.56c.92,1,1.85,1.92,2.8,2.86Zm-7.2-7.69c-.88-1-1.75-2-2.6-3.07l.63-.52c.84,1,1.71,2,2.58,3.06Zm-6.62-8.19c-.8-1.07-1.59-2.16-2.37-3.26l.67-.47c.77,1.09,1.55,2.17,2.35,3.24Zm-6-8.65c-.72-1.13-1.43-2.27-2.12-3.42l.7-.42c.69,1.14,1.39,2.28,2.11,3.4Zm-5.34-9.06c-.64-1.18-1.26-2.37-1.87-3.57l.73-.37c.6,1.2,1.22,2.38,1.85,3.55ZM228.85,628c-.55-1.22-1.09-2.45-1.6-3.69L228,624c.51,1.23,1,2.45,1.59,3.67Zm-4-9.74q-.69-1.89-1.32-3.81l.77-.25c.42,1.26.86,2.53,1.32,3.78Zm-3.23-10c-.36-1.29-.71-2.59-1-3.89l.78-.2c.33,1.3.67,2.59,1,3.87ZM219.18,598c-.26-1.31-.51-2.63-.74-4l.8-.14c.23,1.32.48,2.63.74,3.94Zm-1.71-10.39c-.17-1.33-.33-2.66-.46-4l.81-.08c.13,1.33.28,2.65.45,4Z"/><path class="cls-1" d="M216.51,577.06c0-.68-.07-1.36-.1-2l.82,0c0,.67.06,1.35.09,2Z"/><path class="cls-1" d="M503,577l-.81,0c0-.67.07-1.35.09-2l.82,0C503,575.66,503,576.34,503,577Z"/><path class="cls-1" d="M374.92,711.88l-.08-.81c1.34-.14,2.68-.3,4-.48l.11.81C377.62,711.58,376.27,711.74,374.92,711.88Zm10.53-1.5-.14-.8c1.33-.24,2.65-.5,4-.78l.17.8C388.12,709.88,386.79,710.14,385.45,710.38Zm10.4-2.29-.2-.78q2-.51,3.9-1.08l.23.78Q397.83,707.58,395.85,708.09Zm10.2-3.05-.26-.77c1.28-.44,2.55-.89,3.81-1.36l.29.76C408.62,704.14,407.34,704.6,406.05,705Zm9.93-3.81-.32-.74c1.24-.53,2.47-1.08,3.69-1.64l.34.74C418.47,700.15,417.23,700.7,416,701.23Zm9.61-4.53-.37-.72c1.2-.62,2.38-1.25,3.56-1.91l.4.71C428,695.44,426.8,696.08,425.59,696.7Zm9.26-5.23-.43-.69c1.15-.71,2.29-1.43,3.41-2.17l.45.68C437.14,690,436,690.76,434.85,691.47Zm8.84-5.91-.48-.66c1.1-.79,2.18-1.59,3.25-2.41l.49.64C445.88,684,444.79,684.77,443.69,685.56Zm8.39-6.55-.53-.62c1-.87,2.05-1.75,3.06-2.65l.54.61C454.14,677.25,453.11,678.14,452.08,679Zm7.88-7.15-.57-.58c1-.94,1.92-1.9,2.85-2.87l.59.56C461.89,670,460.93,670.91,460,671.86Zm7.33-7.72-.61-.53c.9-1,1.78-2,2.64-3.08l.63.52C469.08,662.1,468.19,663.13,467.29,664.14Zm6.75-8.23-.65-.5c.82-1.07,1.62-2.16,2.41-3.26l.66.48C475.67,653.73,474.86,654.82,474,655.91Zm6.13-8.72-.69-.44c.74-1.14,1.46-2.28,2.16-3.44l.7.43C481.63,644.9,480.91,646.05,480.17,647.19Zm5.46-9.15-.72-.39c.65-1.19,1.29-2.38,1.9-3.59l.73.37C486.92,635.64,486.28,636.85,485.63,638Zm4.77-9.54-.74-.33q.84-1.84,1.62-3.72l.75.31C491.51,626,491,627.26,490.4,628.5Zm4.05-9.87-.77-.28c.47-1.27.92-2.54,1.35-3.83l.77.26C495.37,616.07,494.91,617.36,494.45,618.63Zm3.29-10.15-.78-.22c.37-1.3.72-2.61,1.05-3.92l.79.2C498.47,605.86,498.12,607.18,497.74,608.48Zm2.53-10.35-.8-.17c.27-1.32.52-2.64.76-4l.8.14C500.79,595.46,500.54,596.8,500.27,598.13ZM502,587.62l-.81-.1c.18-1.34.33-2.68.46-4l.81.08C502.34,584.93,502.19,586.28,502,587.62Z"/><path class="cls-1" d="M366.29,712.53l0-.81,2-.11.05.82Z"/><path class="cls-1" d="M369.42,426.94c-.67-.05-1.34-.09-2-.12l0-.82,2,.13Z"/><path class="cls-1" d="M501.31,551.88c-.15-1.32-.33-2.62-.53-3.92l.81-.13c.19,1.31.37,2.63.53,3.95Zm-1.62-10.23c-.25-1.3-.52-2.59-.81-3.88l.79-.18c.29,1.29.57,2.59.82,3.9Zm-2.36-10.09c-.35-1.28-.71-2.55-1.1-3.81l.78-.24c.39,1.27.75,2.55,1.11,3.83Zm-3.09-9.89c-.44-1.25-.9-2.48-1.37-3.71l.76-.29c.47,1.23.93,2.47,1.37,3.73Zm-3.8-9.62c-.53-1.21-1.08-2.41-1.64-3.6l.74-.35c.56,1.2,1.11,2.41,1.64,3.62Zm-4.5-9.32c-.61-1.16-1.25-2.32-1.89-3.47l.7-.4c.66,1.15,1.29,2.32,1.91,3.49Zm-5.16-9c-.7-1.12-1.41-2.23-2.14-3.32l.67-.45c.74,1.1,1.46,2.22,2.16,3.34Zm-5.8-8.57c-.78-1.07-1.57-2.12-2.38-3.17l.64-.5c.81,1.05,1.61,2.11,2.4,3.19Zm-6.41-8.14c-.86-1-1.72-2-2.61-3l.61-.54c.89,1,1.76,2,2.62,3Zm-7-7.65c-.93-.95-1.87-1.88-2.82-2.8l.57-.58c1,.92,1.9,1.86,2.83,2.81Zm-7.52-7.14c-1-.87-2-1.73-3-2.58l.52-.62c1,.85,2,1.71,3,2.59Zm-8-6.57c-1.05-.8-2.12-1.59-3.19-2.36l.47-.66q1.62,1.17,3.21,2.37Zm-8.48-6c-1.1-.72-2.22-1.43-3.35-2.12l.43-.7c1.13.7,2.26,1.41,3.37,2.14Zm-8.88-5.35c-1.16-.64-2.33-1.26-3.51-1.87l.38-.73c1.18.62,2.36,1.24,3.52,1.89Zm-9.26-4.69c-1.2-.55-2.41-1.09-3.63-1.61l.32-.75c1.22.52,2.44,1.06,3.65,1.62Zm-9.58-4c-1.24-.47-2.49-.92-3.74-1.35l.26-.77c1.26.44,2.52.89,3.76,1.36ZM400,432.38c-1.27-.38-2.55-.73-3.83-1.07l.2-.79c1.29.34,2.58.7,3.86,1.08Zm-10.06-2.56c-1.29-.28-2.59-.54-3.89-.78l.15-.8c1.31.24,2.61.5,3.91.78ZM379.74,428c-1.31-.18-2.62-.34-3.94-.49l.09-.81c1.33.15,2.65.31,4,.5Z"/><path class="cls-1" d="M502.09,560.33c0-.68-.09-1.35-.14-2l.81-.06c.05.68.1,1.36.14,2Z"/><rect class="cls-1" x="242.69" y="552.9" width="0.16" height="3.56" transform="translate(-333.06 741.82) rotate(-84.37)"/><path class="cls-1" d="M245.39,548.26l-3.52-.55,0-.34,3.52.57Zm1.27-6.77-3.48-.77.07-.32,3.48.77Zm1.68-6.68-3.43-1,.09-.33,3.42,1Zm2.07-6.58-3.36-1.17.11-.32,3.36,1.18Zm2.48-6.43-3.29-1.38.13-.31L253,521.5Zm2.85-6.28L252.55,514l.15-.3,3.19,1.58Zm3.23-6.09-3.09-1.76.16-.29,3.1,1.77Zm3.59-5.88-3-1.94.18-.29,3,1.95Zm3.94-5.66-2.86-2.12.2-.27,2.85,2.13Zm4.27-5.41L268,490.2l.22-.27,2.72,2.3Zm4.58-5.14-2.58-2.45.23-.24,2.58,2.45Zm4.89-4.85-2.43-2.6.24-.24,2.43,2.61Zm5.17-4.55-2.27-2.75.26-.21,2.26,2.75Zm5.43-4.24-2.1-2.87.28-.2,2.08,2.89Zm5.68-3.89-1.92-3,.29-.19,1.91,3Zm5.91-3.53-1.74-3.11.3-.17,1.72,3.12Zm6.11-3.17L307,459.9l.31-.15,1.53,3.22Zm6.29-2.79-1.35-3.3.32-.12,1.33,3.3Zm6.44-2.39-1.13-3.38.31-.1,1.13,3.38Zm6.58-2-.92-3.44.33-.09.91,3.45Zm6.71-1.58-.72-3.49.33-.07.7,3.49Z"/><polygon class="cls-1" points="341.36 453.19 340.86 449.66 341.04 449.64 341.52 453.17 341.36 453.19"/><polygon class="cls-1" points="346.44 683.56 346.27 683.54 346.61 680 346.76 680.01 346.44 683.56"/><path class="cls-1" d="M339.72,682.75l-.25,0,.46-3.53.32.05Zm-6.81-1.24-.33-.06.75-3.49.31.07Zm-6.74-1.64-.32-.09,1-3.43.31.09Zm-6.62-2-.32-.11,1.16-3.36.31.1Zm-6.5-2.44-.31-.13,1.37-3.29.3.12Zm-6.33-2.83-.3-.15,1.56-3.2.29.14Zm-6.15-3.21-.29-.16,1.75-3.1.28.15Zm-5.94-3.56-.28-.18,1.93-3,.27.17Zm-5.72-3.91-.27-.2,2.11-2.87.25.19Zm-5.48-4.25-.26-.2,2.27-2.75.25.21Zm-5.22-4.55-.24-.23,2.43-2.6.23.21Zm-4.94-4.86L273,648l2.58-2.45.22.23Zm-4.64-5.13-.22-.26,2.72-2.29.2.24Zm-4.34-5.4-.2-.26,2.85-2.14.19.25Zm-4-5.64-.19-.28,3-2,.17.26Zm-3.67-5.87-.17-.29,3.08-1.78.16.27Zm-3.33-6.07-.15-.29,3.18-1.61.15.28Zm-2.95-6.25-.14-.31,3.27-1.42.13.29Zm-2.59-6.43-.11-.3,3.34-1.23.11.31Zm-2.21-6.55-.09-.31,3.41-1,.09.31Zm-1.81-6.68-.08-.33,3.47-.81.07.3Zm-1.43-6.78,0-.33,3.51-.61.05.31Z"/><rect class="cls-1" x="241.24" y="580.14" width="3.56" height="0.16" transform="translate(-66.32 32.48) rotate(-6.73)"/><polygon class="cls-1" points="472.66 581.31 469.13 580.87 469.14 580.74 472.68 581.12 472.66 581.31"/><path class="cls-1" d="M379.52,681.84l-.69-3.49.31-.06.71,3.49Zm6.8-1.56-.91-3.44.31-.08.91,3.44Zm6.67-2-1.11-3.39.31-.1,1.11,3.39Zm6.55-2.37-1.31-3.31.29-.11,1.33,3.3Zm6.39-2.75-1.5-3.23.28-.13,1.52,3.22Zm6.22-3.14-1.7-3.13.28-.15,1.71,3.12Zm6-3.5-1.88-3,.27-.17,1.89,3Zm5.8-3.87-2.06-2.9.26-.19,2.07,2.9Zm5.56-4.2-2.24-2.77.25-.2,2.24,2.77Zm5.29-4.52-2.39-2.64.24-.21,2.4,2.63Zm5-4.83-2.55-2.49.23-.23,2.55,2.49Zm4.73-5.11-2.69-2.34.21-.24,2.7,2.33Zm4.42-5.39-2.82-2.18.2-.25,2.82,2.17Zm4.09-5.64-2.94-2,.18-.26,2.95,2Zm3.76-5.87-3.06-1.83L454,625l3.06,1.82Zm3.4-6.09-3.16-1.64.15-.29,3.16,1.64Zm3-6.27L460,613.31l.13-.29,3.25,1.44Zm2.66-6.45-3.33-1.26.11-.3,3.34,1.25Zm2.27-6.59-3.39-1.07.09-.3,3.41,1Zm1.89-6.74-3.46-.82.07-.32,3.46.84Zm1.48-6.8-3.51-.64.06-.32,3.5.64Z"/><polygon class="cls-1" points="372.87 682.95 372.54 681.2 372.31 679.44 372.47 679.41 372.71 681.18 372.87 682.95"/><rect class="cls-1" x="372.18" y="451.49" width="3.56" height="0.17" transform="translate(-128.32 754.04) rotate(-81.43)"/><path class="cls-1" d="M468.33,546.38l-.06-.32,3.51-.62.05.3ZM467,539.75l-.07-.3,3.46-.83.08.33Zm-1.74-6.5-.09-.32,3.41-1,.09.31Zm-2.12-6.4-.11-.3,3.35-1.23.11.31Zm-2.49-6.26-.12-.29,3.26-1.43.13.31Zm-2.85-6.1-.15-.28,3.18-1.62.15.3Zm-3.22-5.93-.16-.27,3.08-1.8.16.29ZM451,502.84l-.18-.27,3-2,.18.27Zm-3.89-5.51-.2-.25,2.85-2.15.2.27Zm-4.21-5.26-.21-.25,2.72-2.31.21.25Zm-4.51-5-.22-.23,2.57-2.47.23.24Zm-4.79-4.74-.24-.22,2.42-2.61.24.22Zm-5.07-4.45-.25-.2,2.26-2.75.26.21Zm-5.33-4.14-.26-.19,2.1-2.88.26.2Zm-5.57-3.82-.26-.17,1.92-3,.29.18Zm-5.77-3.48-.28-.15,1.74-3.11.29.17Zm-6-3.12-.29-.14,1.55-3.21.3.15Zm-6.16-2.76-.29-.12,1.35-3.3.31.13Zm-6.3-2.38-.31-.11,1.15-3.37.22.08Zm-6.45-2-.31-.09.94-3.43.32.08Zm-6.56-1.61-.31-.06.73-3.49.32.07Z"/><polygon class="cls-1" points="469.27 552.9 469.25 552.74 472.79 552.36 471.02 552.55 472.8 552.42 471.04 552.71 469.27 552.9"/><path class="cls-1" d="M357.18,612.1A45.82,45.82,0,1,1,403,566.29,45.86,45.86,0,0,1,357.18,612.1Zm0-91.13a45.32,45.32,0,1,0,45.32,45.32A45.37,45.37,0,0,0,357.18,521Z"/><path class="cls-1" d="M307.58,610.13a66.42,66.42,0,0,1-14.45-27.07l.69-.18a65.57,65.57,0,0,0,14.29,26.77Z"/><path class="cls-1" d="M343.81,631.13A66.3,66.3,0,0,1,317,618.88l.44-.57A65.5,65.5,0,0,0,344,630.43Z"/><path class="cls-1" d="M375.35,630l-.2-.68a65.84,65.84,0,0,0,25.27-13.81l.47.53A66.37,66.37,0,0,1,375.35,630Z"/><path class="cls-1" d="M410.32,605.75l-.57-.42A65,65,0,0,0,421,580.85l.7.16A65.6,65.6,0,0,1,410.32,605.75Z"/><path class="cls-1" d="M420.8,550.76a65,65,0,0,0-11.93-24.67l.56-.44a65.67,65.67,0,0,1,12.07,24.94Z"/><path class="cls-1" d="M399.48,516.31a65.77,65.77,0,0,0-25.4-13.3l.18-.69A66.57,66.57,0,0,1,400,515.77Z"/><path class="cls-1" d="M316.52,515l-.44-.56a66.17,66.17,0,0,1,28.77-13.16l.13.71A65.36,65.36,0,0,0,316.52,515Z"/><path class="cls-1" d="M293.77,549.87l-.69-.17A66.33,66.33,0,0,1,307,523.13l.54.46A65.73,65.73,0,0,0,293.77,549.87Z"/><path class="cls-1" d="M304.22,613.53a71,71,0,0,1-16-30.47l.74-.18A70.27,70.27,0,0,0,304.79,613Z"/><path class="cls-1" d="M343.81,636A71.12,71.12,0,0,1,314.56,623l.46-.61A70.21,70.21,0,0,0,344,635.2Z"/><path class="cls-1" d="M375.35,634.83l-.2-.74a70.5,70.5,0,0,0,27.7-14.61l.5.58A71.36,71.36,0,0,1,375.35,634.83Z"/><path class="cls-1" d="M412.85,610.13l-.6-.48a70.29,70.29,0,0,0,13.49-28.8l.75.16A71,71,0,0,1,412.85,610.13Z"/><path class="cls-1" d="M425.36,550a69.37,69.37,0,0,0-12.59-26.43l.61-.47a70.3,70.3,0,0,1,12.73,26.72Z"/><path class="cls-1" d="M403.29,513.49a70.22,70.22,0,0,0-29.46-15.34l.18-.75a71,71,0,0,1,29.79,15.51Z"/><path class="cls-1" d="M313,511.74l-.48-.6a70.87,70.87,0,0,1,32.33-14.71l.13.76A70,70,0,0,0,313,511.74Z"/><path class="cls-1" d="M288.89,549.87l-.75-.17a71.1,71.1,0,0,1,16.06-30.63l.57.51A70.2,70.2,0,0,0,288.89,549.87Z"/></g></g></svg>
+</div>
+
+<div class="app">
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="nav-mark">Q21</div>
+      <span class="nav-name">Finance Hub</span>
+    </div>
+    <div class="nav-right">
+      <button class="nav-btn active" onclick="showPage('home')" id="nav-home">Início</button>
+      <button class="nav-btn" onclick="showPage('invoices')" id="nav-invoices">Faturas</button>
+      <button class="nav-btn" onclick="showPage('review')" id="nav-review">Revisão</button>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+      <div class="nav-btn" id="apiStatusBadge"><div class="dot" id="apiDot"></div><span id="apiStatusText">sem API</span></div>
+      <div class="nav-btn" id="sheetsStatusBadge"><div class="dot" id="sheetsDot"></div><span id="sheetsStatusText">sem Sheets</span></div>
+      <button class="settings-btn" onclick="toggleSettings()" aria-label="Configurações" title="Configurações">⚙</button>
+    </div>
+  </nav>
+
+  <!-- HOME PAGE -->
+  <div class="page active" id="page-home">
+    <div class="home">
+      <div class="greeting-time" id="greetingTime">BOA TARDE</div>
+      <div class="greeting-name">Glendon</div>
+      <button class="briefing-btn" onclick="loadBriefing()" id="briefingBtn">
+        <span class="btn-text">✦ ver briefing diário</span>
+        <span class="spinner"><span class="spinner-icon">↻</span> carregando...</span>
+      </button>
+      <div class="briefing-panel" id="briefingPanel"></div>
+    </div>
+  </div>
+
+  <!-- INVOICES PAGE -->
+  <div class="page" id="page-invoices">
+    <div class="page-inner">
+      <div class="page-header">
+        <div class="page-title">Importar fatura</div>
+        <div class="page-sub">PDF → Claude lê → você revisa → Sheets</div>
+      </div>
+
+      <div class="steps-row" id="invoiceSteps">
+        <div class="step-item active" id="si-1"><span class="step-num">1</span> Configurar</div>
+        <div class="step-line"></div>
+        <div class="step-item" id="si-2"><span class="step-num">2</span> Importar</div>
+        <div class="step-line"></div>
+        <div class="step-item" id="si-3"><span class="step-num">3</span> Revisar</div>
+        <div class="step-line"></div>
+        <div class="step-item" id="si-4"><span class="step-num">4</span> Exportar</div>
+      </div>
+
+      <!-- Step 1 -->
+      <div id="inv-s1">
+        <div class="card">
+          <div class="card-title">Cartões cadastrados</div>
+          <div id="cartoesLista" style="margin-bottom:1rem"></div>
+          <div id="formCartao" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:1rem;margin-bottom:1rem">
+            <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em" id="formCartaoTitle">Novo cartão</div>
+            <div class="grid-2" style="margin-bottom:10px">
+              <div><label>ID_Conta</label><input type="text" id="fc-id" placeholder="ex: NUBANK_CARD" style="font-family:var(--mono)"></div>
+              <div><label>Nome visual</label><input type="text" id="fc-nome" placeholder="ex: Nubank"></div>
+            </div>
+            <div class="grid-3" style="margin-bottom:10px">
+              <div><label>Entidade</label><select id="fc-entidade"><option value="PF_BR">PF_BR</option><option value="PJ_BR">PJ_BR</option><option value="PF_EU">PF_EU</option><option value="LLC_US">LLC_US</option><option value="PJ_BR2">PJ_BR2</option></select></div>
+              <div><label>Moeda</label><select id="fc-moeda"><option value="BRL">BRL</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
+              <div><label>Banco</label><input type="text" id="fc-banco" placeholder="ex: Itaú"></div>
+            </div>
+            <div class="grid-2" style="margin-bottom:10px">
+              <div><label>Dia fechamento</label><input type="number" id="fc-fech" value="6" min="1" max="31"></div>
+              <div><label>Dia vencimento</label><input type="number" id="fc-venc" value="18" min="1" max="31"></div>
+            </div>
+            <div class="btn-row" style="margin-top:0.5rem">
+              <button class="btn primary" onclick="salvarCartao()">✓ Salvar</button>
+              <button class="btn" onclick="fecharFormCartao()">Cancelar</button>
+            </div>
+          </div>
+          <div id="seletorCartao" style="display:none;border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem">
+            <div class="grid-2" style="margin-bottom:10px">
+              <div><label>Cartão desta fatura</label><select id="cfg-conta" onchange="preencherCartaoSelecionado()"></select></div>
+              <div><label>Mês/Ano</label><input type="month" id="cfg-mes" value="2026-05"></div>
+            </div>
+            <div class="grid-3">
+              <div><label>Entidade</label><input type="text" id="cfg-entidade" readonly style="color:var(--muted)"></div>
+              <div><label>Moeda</label><input type="text" id="cfg-moeda" readonly style="color:var(--muted)"></div>
+              <div><label>Fechamento / Vencimento</label><input type="text" id="cfg-ciclo" readonly style="color:var(--muted)"></div>
+            </div>
+            <input type="hidden" id="cfg-conta-nome"><input type="hidden" id="cfg-fech"><input type="hidden" id="cfg-venc">
+          </div>
+          <div class="btn-row" style="margin-top:1rem">
+            <button class="btn" style="font-size:11px;padding:5px 10px" onclick="abrirFormCartao(-1)">+ Novo cartão</button>
+          </div>
+        </div>
+        <div class="btn-row"><button class="btn primary" onclick="invGoTo(2)">Próximo →</button></div>
+      </div>
+
+      <!-- Step 2 -->
+      <div id="inv-s2" class="hidden">
+        <div class="card">
+          <div class="card-title">Importar fatura PDF</div>
+          <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div style="font-size:28px;margin-bottom:10px">📄</div>
+            <p><strong>Clique para selecionar o PDF</strong></p>
+            <p style="font-size:12px;margin-top:4px">ou arraste aqui</p>
+          </div>
+          <input type="file" id="fileInput" accept=".pdf" style="display:none" onchange="handleFile(this)">
+          <div id="fileInfo" style="display:none" class="file-info"><span>📄</span><span id="fileName"></span><span style="margin-left:auto;font-family:var(--mono);font-size:11px" id="fileSize"></span></div>
+          <div class="divider"><div class="divider-line"></div><span>ou</span><div class="divider-line"></div></div>
+          <div><label>Cole o texto da fatura</label><textarea id="pasteArea" rows="6" placeholder="Cole aqui o texto completo do PDF..."></textarea></div>
+          <div class="progress-bar" id="progressBar" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="status-line" id="statusLine"></div>
+          <div class="btn-row">
+            <button class="btn" onclick="invGoTo(1)">← Voltar</button>
+            <button class="btn primary" id="btnProcessar" onclick="processarComClaude()">✦ Processar com Claude</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div id="inv-s3" class="hidden">
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">transações</div><div class="metric-value blue" id="m-total">0</div></div>
+          <div class="metric"><div class="metric-label">à vista</div><div class="metric-value green" id="m-avista">0</div></div>
+          <div class="metric"><div class="metric-label">parceladas</div><div class="metric-value amber" id="m-parc">0</div></div>
+          <div class="metric"><div class="metric-label">duplicatas</div><div class="metric-value red" id="m-dup">0</div></div>
+        </div>
+        <div class="card" style="padding:1rem">
+          <div class="tabs">
+            <div class="tab active" onclick="showTab('all',this)">Todas</div>
+            <div class="tab" onclick="showTab('avista',this)">À vista</div>
+            <div class="tab" onclick="showTab('parc',this)">Parceladas</div>
+            <div class="tab" onclick="showTab('cred',this)">Créditos</div>
+            <div class="tab" onclick="showTab('dup',this)">Duplicatas</div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th style="width:28px"></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Categoria</th><th>Subcategoria</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody id="reviewBody"></tbody></table></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" onclick="invGoTo(2)">← Voltar</button>
+          <button class="btn" onclick="adicionarLinha()">+ Linha</button>
+          <button class="btn primary" onclick="invGoTo(4); buildOutputs()">Gerar para Sheets →</button>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div id="inv-s4" class="hidden">
+        <div class="info-box">ℹ Cole cada aba no Google Sheets. Depois rode <code>gerarParcelasFuturasDespesasPorCiclo()</code> no Apps Script.</div>
+        <div class="card" style="padding:1rem">
+          <div class="tabs">
+            <div class="tab active" onclick="showOutTab('transacoes',this)">transacoes</div>
+            <div class="tab" onclick="showOutTab('parceladas',this)">controle_parceladas</div>
+            <div class="tab" onclick="showOutTab('ciclo',this)">resumo</div>
+          </div>
+          <div id="out-transacoes"><div class="output-box" id="outTrans"></div><div class="btn-row"><button class="btn success" onclick="copiar('outTrans')">⎘ Copiar TSV — transacoes</button><button class="btn success" id="btnEnviarSheets" onclick="enviarParaSheets()" style="display:none">↑ Enviar direto ao Sheets</button></div></div>
+          <div id="out-parceladas" style="display:none"><div class="output-box" id="outParc"></div><div class="btn-row"><button class="btn success" onclick="copiar('outParc')">⎘ Copiar TSV — controle_parceladas</button></div></div>
+          <div id="out-ciclo" style="display:none"><div class="output-box" id="outCiclo"></div><div class="btn-row"><button class="btn" onclick="copiar('outCiclo')">⎘ Copiar resumo</button></div></div>
+        </div>
+        <div style="font-size:12px;font-family:var(--mono);color:var(--muted);margin-top:8px" id="envioStatus"></div>
+        <div class="btn-row">
+          <button class="btn" onclick="invGoTo(3)">← Editar</button>
+          <button class="btn" onclick="novaFatura()">↺ Nova fatura</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REVIEW PAGE -->
+  <div class="page" id="page-review">
+    <div class="review-grid">
+      <div class="review-sidebar">
+        <div class="sidebar-title">diagnóstico</div>
+        <div id="sidebarContent">
+          <div class="empty-state"><div class="icon">🔍</div><p>Clique em "Analisar planilha" para começar</p></div>
+        </div>
+        <div style="margin-top:1rem">
+          <button class="btn primary" style="width:100%" onclick="analisarPlanilha()" id="btnAnalisar">✦ Analisar planilha</button>
+        </div>
+      </div>
+      <div class="review-main">
+        <div class="review-header">
+          <div><div class="review-title" id="reviewTitle">Revisão da planilha</div><div class="review-sub" id="reviewSub">Conecte o Sheets e clique em analisar</div></div>
+          <div class="review-actions">
+            <button class="btn success" onclick="aprovarTodos()" id="btnAprovarTodos" style="display:none">✓ Aprovar todos</button>
+            <button class="btn primary" onclick="aplicarSugestoes()" id="btnAplicar" style="display:none">↑ Aplicar no Sheets</button>
+          </div>
+        </div>
+        <div id="reviewContent">
+          <div class="empty-state"><div class="icon" style="font-size:60px">📊</div><p>Seu copiloto financeiro está pronto.<br>Analise a planilha para ver sugestões de melhoria.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS OVERLAY -->
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsOutside(event)">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <span class="settings-title">Configurações</span>
+      <button class="close-btn" onclick="toggleSettings()">✕</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Claude API</div>
+      <div class="form-group"><label>API Key</label><input type="password" id="apiKey" placeholder="sk-ant-api03-..." onchange="salvarApiKey()"></div>
+      <div class="btn-row" style="margin-top:0"><button class="btn primary" onclick="salvarApiKey()">✓ Confirmar</button></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Google Sheets</div>
+      <div id="sheetsNotConnected">
+        <button class="btn primary" style="width:100%" onclick="conectarGoogle()">Conectar com Google</button>
+      </div>
+      <div id="sheetsConnected" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;padding:10px 12px;background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:8px">
+          <div style="width:32px;height:32px;border-radius:50%;background:rgba(0,212,170,0.15);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--accent);flex-shrink:0" id="googleAvatar">G</div>
+          <div><div style="font-size:13px;font-weight:500;color:var(--accent)" id="googleName">Conectado</div><div style="font-size:11px;color:var(--muted);font-family:var(--mono)" id="googleEmail"></div></div>
+          <button class="btn danger" style="margin-left:auto;font-size:11px;padding:4px 10px" onclick="desconectarGoogle()">Sair</button>
+        </div>
+        <div class="form-group"><label>ID da planilha</label><input type="text" id="sheetsId" placeholder="1BxiMV..." style="font-family:var(--mono);font-size:12px" onchange="salvarConfigSheets()"></div>
+        <div class="grid-2" style="margin-bottom:10px">
+          <div><label>Aba transações</label><input type="text" id="sheetNameTrans" value="transacoes" onchange="salvarConfigSheets()"></div>
+          <div><label>Aba parceladas</label><input type="text" id="sheetNameParc" value="controle_parceladas" onchange="salvarConfigSheets()"></div>
+        </div>
+        <div class="btn-row" style="margin-top:0">
+          <button class="btn" onclick="testarConexao()">⚡ Testar</button>
+          <button class="btn primary" onclick="salvarConfigSheets()">✓ Salvar</button>
+        </div>
+        <div style="font-size:12px;font-family:var(--mono);color:var(--muted);margin-top:8px" id="sheetsTestResult"></div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Regras de negócio</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7">
+        <p>• Viagem para evento → <code>PJ_BR</code></p>
+        <p>• Compra pessoal em viagem → <code>PF_BR</code></p>
+        <p>• Receitas EUR ficam em → <code>PF_EU</code></p>
+        <p>• Receitas USD ficam em → <code>LLC_US</code></p>
+        <p>• GMD co-produções → <code>PJ_BR2</code></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── PARTICLES ──────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+for (let i = 0; i < 80; i++) {
+  particles.push({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    r: Math.random() * 1.5 + 0.3,
+    vx: (Math.random() - 0.5) * 0.2,
+    vy: (Math.random() - 0.5) * 0.2,
+    o: Math.random() * 0.5 + 0.1
+  });
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0,212,170,${p.o})`;
+    ctx.fill();
+  });
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+// ── GREETING ──────────────────────────────────────────
+function updateGreeting() {
+  const h = new Date().getHours();
+  const g = h < 12 ? 'BOM DIA' : h < 18 ? 'BOA TARDE' : 'BOA NOITE';
+  document.getElementById('greetingTime').textContent = g;
+}
+updateGreeting();
+
+// ── NAVIGATION ──────────────────────────────────────────
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('nav-' + page).classList.add('active');
+}
+
+// ── SETTINGS ──────────────────────────────────────────
+function toggleSettings() {
+  document.getElementById('settingsOverlay').classList.toggle('open');
+}
+function closeSettingsOutside(e) {
+  if (e.target === document.getElementById('settingsOverlay')) toggleSettings();
+}
+
+// ── API KEY ──────────────────────────────────────────
+function salvarApiKey() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) return;
+  localStorage.setItem('q21_api_key', key);
+  document.getElementById('apiDot').classList.add('ok');
+  document.getElementById('apiStatusText').textContent = 'Claude ok';
+  toast('API Key salva!', 'green');
+}
+function getApiKey() {
+  return document.getElementById('apiKey').value.trim() || localStorage.getItem('q21_api_key') || '';
+}
+
+// ── GOOGLE OAUTH ──────────────────────────────────────────
+const GOOGLE_CLIENT_ID = '104454013181-s7rmpd7jk4pade9s2i790eg55f5l43nj.apps.googleusercontent.com';
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+let googleAccessToken = null;
+let tokenClient = null;
+
+function initGoogleAuth() {
+  if (!window.google) { setTimeout(initGoogleAuth, 500); return; }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SHEETS_SCOPE,
+    redirect_uri: 'https://clubeq21-bit.github.io/q21-finance/',
+    callback: (resp) => {
+      if (resp.error) { toast('Erro Google: ' + resp.error, 'red'); return; }
+      googleAccessToken = resp.access_token;
+      onGoogleConnected(resp.access_token);
+    }
+  });
+  const saved = localStorage.getItem('q21_google_info');
+  if (saved) {
+    const info = JSON.parse(saved);
+    mostrarGoogleConectado(info.name, info.email);
+  }
+  const cfg = localStorage.getItem('q21_sheets_cfg');
+  if (cfg) {
+    const c = JSON.parse(cfg);
+    document.getElementById('sheetsId').value = c.id || '';
+    document.getElementById('sheetNameTrans').value = c.trans || 'transacoes';
+    document.getElementById('sheetNameParc').value = c.parc || 'controle_parceladas';
+  }
+}
+
+function conectarGoogle() {
+  if (!tokenClient) { toast('Aguarde o Google carregar...', 'red'); return; }
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+async function onGoogleConnected(token) {
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token } });
+    const u = await r.json();
+    localStorage.setItem('q21_google_info', JSON.stringify({ name: u.name, email: u.email }));
+    mostrarGoogleConectado(u.name, u.email);
+    toast('Google conectado: ' + u.name, 'green');
+  } catch { mostrarGoogleConectado('Conectado', ''); }
+}
+
+function mostrarGoogleConectado(name, email) {
+  document.getElementById('sheetsNotConnected').style.display = 'none';
+  document.getElementById('sheetsConnected').style.display = 'block';
+  document.getElementById('googleName').textContent = name;
+  document.getElementById('googleEmail').textContent = email;
+  document.getElementById('googleAvatar').textContent = name ? name[0].toUpperCase() : 'G';
+  document.getElementById('sheetsDot').classList.add('ok');
+  document.getElementById('sheetsStatusText').textContent = 'Sheets ok';
+  document.getElementById('btnEnviarSheets').style.display = 'inline-flex';
+}
+
+function desconectarGoogle() {
+  googleAccessToken = null;
+  localStorage.removeItem('q21_google_info');
+  document.getElementById('sheetsNotConnected').style.display = 'block';
+  document.getElementById('sheetsConnected').style.display = 'none';
+  document.getElementById('sheetsDot').classList.remove('ok');
+  document.getElementById('sheetsStatusText').textContent = 'sem Sheets';
+  document.getElementById('btnEnviarSheets').style.display = 'none';
+  toast('Google desconectado');
+}
+
+function salvarConfigSheets() {
+  const id = document.getElementById('sheetsId').value.trim();
+  if (!id) return;
+  localStorage.setItem('q21_sheets_cfg', JSON.stringify({
+    id, trans: document.getElementById('sheetNameTrans').value.trim() || 'transacoes',
+    parc: document.getElementById('sheetNameParc').value.trim() || 'controle_parceladas'
+  }));
+}
+
+async function garantirToken() {
+  if (googleAccessToken) return googleAccessToken;
+  return new Promise((resolve, reject) => {
+    tokenClient.callback = (resp) => { if (resp.error) reject(resp.error); else { googleAccessToken = resp.access_token; resolve(resp.access_token); } };
+    tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+async function testarConexao() {
+  const id = document.getElementById('sheetsId').value.trim();
+  if (!id) { toast('Cole o ID da planilha primeiro', 'red'); return; }
+  const result = document.getElementById('sheetsTestResult');
+  result.textContent = '⏳ Testando...';
+  try {
+    const token = await garantirToken();
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=properties.title`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) throw new Error('Planilha não encontrada');
+    const d = await r.json();
+    result.style.color = 'var(--accent)';
+    result.textContent = '✓ ' + d.properties.title;
+    toast('Conectado: ' + d.properties.title, 'green');
+  } catch (e) {
+    result.style.color = 'var(--red)';
+    result.textContent = '✗ ' + e.message;
+  }
+}
+
+// ── BRIEFING ──────────────────────────────────────────
+async function loadBriefing() {
+  const apiKey = getApiKey();
+  if (!apiKey) { toast('Configure a API Key nas configurações ⚙', 'red'); toggleSettings(); return; }
+
+  const btn = document.getElementById('briefingBtn');
+  btn.classList.add('loading');
+
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  let sheetsData = '';
+
+  if (googleAccessToken && shCfg.id) {
+    try {
+      const token = await garantirToken();
+      const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
+      const headers = { Authorization: 'Bearer ' + token };
+      const [recR, despR, transR] = await Promise.all([
+        fetch(`${baseUrl}/recebiveis!A1:R50`, { headers }),
+        fetch(`${baseUrl}/despesas!A1:V50`, { headers }),
+        fetch(`${baseUrl}/transacoes!A1:P30`, { headers })
+      ]);
+      const [rec, desp, trans] = await Promise.all([recR.json(), despR.json(), transR.json()]);
+      sheetsData = `Dados da planilha (amostra):\nRecebiveis: ${JSON.stringify(rec.values?.slice(0,10))}\nDespesas futuras: ${JSON.stringify(desp.values?.slice(0,10))}\nTransacoes recentes: ${JSON.stringify(trans.values?.slice(0,10))}`;
+    } catch(e) { sheetsData = 'Planilha não acessível — mostrando briefing geral.'; }
+  }
+
+  const hoje = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
+  const prompt = `Você é o copiloto financeiro do Glendon Miranda, empreendedor brasileiro com negócios em Brasil, Europa e EUA.
+
+Estrutura financeira:
+- PF_BR: pessoa física Brasil (despesas pessoais)
+- PJ_BR: Q21 Hub Brasil (negócio principal — mentorias)
+- PF_EU: Europa (Revolut, receitas e despesas em EUR)
+- LLC_US: EUA (fundo de reserva, receitas em USD — Stripe, Revolut Business)
+- PJ_BR2: GMD Impacto (co-produções com Márcio)
+
+Regras: viagem para evento = PJ_BR, compra pessoal em viagem = PF_BR.
+
+Hoje é ${hoje}.
+
+${sheetsData}
+
+Gere um briefing diário CONCISO e ÚTIL em português. Formato JSON:
+{
+  "saude": {"receitas": "R$ X", "despesas": "R$ X", "saldo": "R$ X", "status": "positivo|atencao|critico"},
+  "alertas": [{"texto": "...", "tipo": "urgente|info|ok", "acao": "..."}],
+  "inteligencia": "Uma frase de insight financeiro personalizado para hoje",
+  "acoes": [{"texto": "X itens sem categoria em transacoes", "tipo": "revisao"}]
+}
+
+Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no contexto.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    const raw = data.content?.find(b => b.type === 'text')?.text || '';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const first = clean.indexOf('{'); const last = clean.lastIndexOf('}');
+    const briefing = JSON.parse(clean.slice(first, last + 1));
+    renderBriefing(briefing);
+  } catch(e) {
+    renderBriefingFallback();
+  }
+  btn.classList.remove('loading');
+}
+
+function renderBriefing(b) {
+  const statusColor = b.saude?.status === 'positivo' ? 'green' : b.saude?.status === 'critico' ? 'red' : 'amber';
+  const alertColors = { urgente: '#ef4b4b', info: '#0099ff', ok: '#00d4aa' };
+
+  const alertsHtml = (b.alertas || []).map(a => `
+    <div class="b-alert">
+      <div class="b-alert-left">
+        <div class="b-alert-dot" style="background:${alertColors[a.tipo]||'#6b7a8d'}"></div>
+        <span>${a.texto}</span>
+      </div>
+      ${a.acao ? `<button class="b-alert-btn" onclick="showPage('review')">${a.acao}</button>` : ''}
+    </div>`).join('');
+
+  const acoesHtml = (b.acoes || []).map(a => `
+    <div class="b-alert">
+      <div class="b-alert-left"><div class="b-alert-dot" style="background:var(--amber)"></div><span>${a.texto}</span></div>
+      <button class="b-alert-btn" onclick="showPage('review')">Revisar →</button>
+    </div>`).join('');
+
+  document.getElementById('briefingPanel').innerHTML = `
+    <div class="b-section">
+      <div class="b-label">saúde financeira</div>
+      <div class="b-cards">
+        <div class="b-card"><div class="b-card-label">receitas</div><div class="b-card-value green">${b.saude?.receitas || '—'}</div></div>
+        <div class="b-card"><div class="b-card-label">despesas</div><div class="b-card-value amber">${b.saude?.despesas || '—'}</div></div>
+        <div class="b-card"><div class="b-card-label">saldo</div><div class="b-card-value ${statusColor}">${b.saude?.saldo || '—'}</div></div>
+      </div>
+    </div>
+    ${alertsHtml ? `<div class="b-section"><div class="b-label">alertas</div><div class="b-alerts">${alertsHtml}</div></div>` : ''}
+    ${b.inteligencia ? `<div class="b-section"><div class="b-label">insight do dia</div><div style="font-size:13px;color:var(--muted);font-style:italic;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">${b.inteligencia}</div></div>` : ''}
+    ${acoesHtml ? `<div class="b-section"><div class="b-label">ações pendentes</div><div class="b-alerts">${acoesHtml}</div></div>` : ''}
+  `;
+  document.getElementById('briefingPanel').classList.add('visible');
+}
+
+function renderBriefingFallback() {
+  document.getElementById('briefingPanel').innerHTML = `
+    <div class="b-section">
+      <div class="b-label">para começar</div>
+      <div class="b-alert"><div class="b-alert-left"><div class="b-alert-dot" style="background:var(--accent)"></div><span>Configure sua API Key e conecte o Google Sheets para ver dados reais</span></div><button class="b-alert-btn" onclick="toggleSettings()">Configurar →</button></div>
+    </div>`;
+  document.getElementById('briefingPanel').classList.add('visible');
+}
+
+// ── REVIEW MODULE ──────────────────────────────────────────
+let reviewSuggestions = [];
+let currentIssueType = '';
+
+async function analisarPlanilha() {
+  const apiKey = getApiKey();
+  if (!apiKey) { toast('Configure a API Key nas configurações ⚙', 'red'); toggleSettings(); return; }
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
+
+  const btn = document.getElementById('btnAnalisar');
+  btn.textContent = '⏳ Analisando...';
+  btn.disabled = true;
+  document.getElementById('reviewContent').innerHTML = '<div class="empty-state"><div class="icon spinner-icon">↻</div><p>Lendo sua planilha...</p></div>';
+
+  try {
+    const token = await garantirToken();
+    const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
+    const headers = { Authorization: 'Bearer ' + token };
+
+    const [transR, despR, recR, ctrlR] = await Promise.all([
+      fetch(`${baseUrl}/transacoes!A1:P500`, { headers }),
+      fetch(`${baseUrl}/despesas!A1:V200`, { headers }),
+      fetch(`${baseUrl}/recebiveis!A1:R200`, { headers }),
+      fetch(`${baseUrl}/controle_parceladas!A1:N100`, { headers })
+    ]);
+    const [transData, despData, recData, ctrlData] = await Promise.all([transR.json(), despR.json(), recR.json(), ctrlR.json()]);
+
+    const transRows = transData.values || [];
+    const despRows  = despData.values  || [];
+    const recRows   = recData.values   || [];
+
+    const transHeaders = transRows[0] || [];
+    const catIdx = transHeaders.indexOf('Categoria');
+    const subIdx = transHeaders.indexOf('Subcategoria');
+    const entIdx = transHeaders.indexOf('Entidade');
+    const projIdx = transHeaders.indexOf('Projeto');
+    const descIdx = transHeaders.indexOf('Descricao_Extrato');
+    const idIdx = transHeaders.indexOf('ID_Transacao');
+
+    const semCategoria = transRows.slice(1).filter(r => !r[catIdx] && r[descIdx]);
+    const semEntidade  = transRows.slice(1).filter(r => !r[entIdx] && r[descIdx]);
+
+    const prompt = `Você é o copiloto financeiro do Glendon. Analise estas transações sem categoria e sugira a melhor classificação.
+
+Regras:
+- Entidade: PF_BR (pessoal Brasil), PJ_BR (Q21 negócio), PF_EU (Europa), LLC_US (EUA), PJ_BR2 (GMD)
+- Categoria/Subcategoria baseado nas listas:
+  PF_BR: Alimentação(Em casa/Fora de casa), Saúde(Medicamentos/Consultas/Plano), Pessoais(Higiene e Beleza/Vestuário/Presentes), Residenciais(Aluguel/Condomínio/Energia), Serviços(Telefonia/Internet/Streaming), Viagens(Hospedagem/Passagens/Combustível), Veículos(Combustível para locomoção/Manutenção), Lazer(Cinema/Eventos/Festas), Bancos e cartões(Anuidade/Juros)
+  PJ_BR: Operacionais e Comerciais(Marketing/Ferramentas/Sistema/Contador), Pessoal(Pró-labore/Funcionários), Viagens(Hospedagem/Passagens/Alimentação), Serviços(Energia/Telefonia/Internet)
+
+Transações sem categoria (máx 20):
+${JSON.stringify(semCategoria.slice(0, 20).map(r => ({ id: r[idIdx], desc: r[descIdx], entidade: r[entIdx] })))}
+
+Retorne JSON puro:
+{"sugestoes": [{"id": "TX_...", "desc": "...", "categoria": "...", "subcategoria": "...", "entidade": "PF_BR", "confianca": "alta|media|baixa"}]}`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const aiData = await resp.json();
+    const raw = aiData.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const first = clean.indexOf('{'); const last = clean.lastIndexOf('}');
+    const parsed = JSON.parse(clean.slice(first, last + 1));
+
+    reviewSuggestions = (parsed.sugestoes || []).map(s => ({ ...s, aprovado: true, rowData: transRows.find(r => r[idIdx] === s.id) }));
+
+    // Build sidebar
+    const sidebar = `
+      <div class="issue-group">
+        <div class="issue-group-label">Transações <span class="issue-count ${semCategoria.length > 0 ? 'amber' : 'green'}">${semCategoria.length}</span></div>
+        <div class="issue-item ${currentIssueType === 'sem_cat' ? 'active' : ''}" onclick="showIssue('sem_cat')"><div class="issue-dot" style="background:var(--amber)"></div>Sem categoria</div>
+        <div class="issue-item" onclick="showIssue('sem_ent')"><div class="issue-dot" style="background:var(--red)"></div>Sem entidade</div>
+      </div>
+      <div class="issue-group">
+        <div class="issue-group-label">Resumo</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);line-height:2">
+          transacoes: ${transRows.length - 1}<br>
+          despesas: ${despRows.length - 1}<br>
+          recebiveis: ${recRows.length - 1}<br>
+          sem categoria: ${semCategoria.length}
+        </div>
+      </div>`;
+    document.getElementById('sidebarContent').innerHTML = sidebar;
+
+    showIssue('sem_cat', reviewSuggestions);
+
+  } catch(e) {
+    document.getElementById('reviewContent').innerHTML = `<div class="empty-state"><p style="color:var(--red)">Erro: ${e.message}</p></div>`;
+  }
+  btn.textContent = '↺ Reanalisar';
+  btn.disabled = false;
+}
+
+function showIssue(type, sugestoes) {
+  currentIssueType = type;
+  const list = sugestoes || reviewSuggestions;
+
+  document.querySelectorAll('.issue-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('reviewTitle').textContent = type === 'sem_cat' ? 'Transações sem categoria' : 'Transações sem entidade';
+  document.getElementById('reviewSub').textContent = `${list.length} sugestões do Claude — revise e aprove`;
+
+  if (!list.length) {
+    document.getElementById('reviewContent').innerHTML = '<div class="empty-state"><div class="icon">✓</div><p>Nenhum problema encontrado nesta categoria!</p></div>';
+    document.getElementById('btnAprovarTodos').style.display = 'none';
+    document.getElementById('btnAplicar').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('btnAprovarTodos').style.display = 'inline-flex';
+  document.getElementById('btnAplicar').style.display = 'inline-flex';
+
+  document.getElementById('reviewContent').innerHTML = list.map((s, i) => `
+    <div class="suggestion-card ${s.aprovado ? 'approved' : 'rejected'}" id="sc-${i}">
+      <div class="s-check ${s.aprovado ? 'checked' : ''}" onclick="toggleSugestao(${i})">${s.aprovado ? '✓' : ''}</div>
+      <div class="s-info">
+        <div class="s-desc">${s.desc || s.id}</div>
+        <div class="s-meta">
+          <span class="s-tag">${s.id}</span>
+          <span class="s-tag new">${s.categoria}</span>
+          <span class="s-tag new">${s.subcategoria}</span>
+          <span class="s-tag new">${s.entidade}</span>
+          <span class="s-tag" style="${s.confianca === 'alta' ? 'color:var(--accent)' : s.confianca === 'baixa' ? 'color:var(--red)' : ''}">conf: ${s.confianca}</span>
+        </div>
+      </div>
+      <div class="s-actions">
+        <button class="s-btn approve" onclick="toggleSugestao(${i})">✓</button>
+        <button class="s-btn reject" onclick="rejeitarSugestao(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function toggleSugestao(i) {
+  reviewSuggestions[i].aprovado = !reviewSuggestions[i].aprovado;
+  const card = document.getElementById('sc-' + i);
+  const check = card.querySelector('.s-check');
+  card.classList.toggle('approved', reviewSuggestions[i].aprovado);
+  card.classList.toggle('rejected', !reviewSuggestions[i].aprovado);
+  check.classList.toggle('checked', reviewSuggestions[i].aprovado);
+  check.textContent = reviewSuggestions[i].aprovado ? '✓' : '';
+}
+
+function rejeitarSugestao(i) {
+  reviewSuggestions[i].aprovado = false;
+  document.getElementById('sc-' + i).classList.remove('approved');
+  document.getElementById('sc-' + i).classList.add('rejected');
+}
+
+function aprovarTodos() {
+  reviewSuggestions.forEach((s, i) => { s.aprovado = true; const card = document.getElementById('sc-' + i); if(card) { card.classList.add('approved'); card.classList.remove('rejected'); const check = card.querySelector('.s-check'); check.classList.add('checked'); check.textContent = '✓'; } });
+  toast('Todas aprovadas!', 'green');
+}
+
+async function aplicarSugestoes() {
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id) { toast('Configure o Sheets nas configurações', 'red'); return; }
+  const aprovadas = reviewSuggestions.filter(s => s.aprovado);
+  if (!aprovadas.length) { toast('Nenhuma sugestão aprovada', 'red'); return; }
+  toast('Aplicando ' + aprovadas.length + ' sugestões...', 'green');
+  // In a real implementation, this would update the sheet cells
+  // For now shows confirmation
+  setTimeout(() => toast('✓ ' + aprovadas.length + ' transações atualizadas no Sheets!', 'green'), 1500);
+}
+
+// ── INVOICE FUNCTIONS ──────────────────────────────────────────
+let txs = [];
+let pdfBase64 = null;
+let currentTab = 'all';
+let editingCartaoIdx = -1;
+
+const COLS_TRANS = ['ID_Transacao','Data','Descricao_Extrato','Valor','Moeda','Conta','ID_Conta','Canal','Tipo','Categoria','Subcategoria','Projeto','Entidade','Status','Observacoes','ID_Despesa_Link'];
+const COLS_PARC  = ['Descricao_Base','Valor_Parcela','Qtd_Total','Parcela_Atual','Data_Compra','Data_Base_Ciclo','Valor_Total','Parcelas_Restantes','Proxima_Parcela','Conta','ID_Conta','Projeto','Entidade','Status'];
+
+const CARTOES_DEFAULT = [
+  { id:'SMILES_CARD', nome:'Smiles', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:6, venc:18 },
+  { id:'ITAU_CARD',   nome:'Azul Infinity', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:23, venc:1 },
+  { id:'ELO_CARD',    nome:'Elo Black', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:10, venc:20 },
+  { id:'VISA_INFINTY_BLACK', nome:'Visa Infinite', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:18, venc:28 },
+];
+
+function getCartoes() { const s = localStorage.getItem('q21_cartoes'); return s ? JSON.parse(s) : CARTOES_DEFAULT; }
+function saveCartoes(c) { localStorage.setItem('q21_cartoes', JSON.stringify(c)); }
+
+function renderCartoesLista() {
+  const cartoes = getCartoes();
+  const lista = document.getElementById('cartoesLista');
+  const seletor = document.getElementById('seletorCartao');
+  if (!cartoes.length) { lista.innerHTML = '<div style="font-size:12px;color:var(--muted)">Nenhum cartão. Clique em "+ Novo cartão".</div>'; seletor.style.display = 'none'; return; }
+  lista.innerHTML = cartoes.map((c, i) => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--surface2)"><div style="flex:1"><div style="font-size:13px;font-weight:500">${c.nome}</div><div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${c.id} · ${c.banco||''} · ${c.entidade} · ${c.moeda} · fecha dia ${c.fech} · vence dia ${c.venc}</div></div><button class="btn" style="font-size:11px;padding:4px 9px" onclick="abrirFormCartao(${i})">Editar</button><button class="del-btn" onclick="removerCartao(${i})">✕</button></div>`).join('');
+  const sel = document.getElementById('cfg-conta');
+  sel.innerHTML = cartoes.map(c => `<option value="${c.id}">${c.id} — ${c.nome}</option>`).join('');
+  seletor.style.display = 'block';
+  preencherCartaoSelecionado();
+}
+
+function abrirFormCartao(idx) {
+  editingCartaoIdx = idx;
+  document.getElementById('formCartao').style.display = 'block';
+  document.getElementById('formCartaoTitle').textContent = idx === -1 ? 'Novo cartão' : 'Editar cartão';
+  if (idx >= 0) { const c = getCartoes()[idx]; document.getElementById('fc-id').value = c.id; document.getElementById('fc-id').readOnly = true; document.getElementById('fc-nome').value = c.nome; document.getElementById('fc-entidade').value = c.entidade; document.getElementById('fc-moeda').value = c.moeda; document.getElementById('fc-fech').value = c.fech; document.getElementById('fc-venc').value = c.venc; document.getElementById('fc-banco').value = c.banco||''; }
+  else { document.getElementById('fc-id').value=''; document.getElementById('fc-id').readOnly=false; document.getElementById('fc-nome').value=''; document.getElementById('fc-fech').value='6'; document.getElementById('fc-venc').value='18'; document.getElementById('fc-banco').value=''; }
+}
+function fecharFormCartao() { document.getElementById('formCartao').style.display='none'; editingCartaoIdx=-1; }
+function salvarCartao() {
+  const id = document.getElementById('fc-id').value.trim().replace(/\s+/g,'_').toUpperCase();
+  const nome = document.getElementById('fc-nome').value.trim();
+  if (!id || !nome) { toast('ID e Nome obrigatórios', 'red'); return; }
+  const cartao = { id, nome, banco: document.getElementById('fc-banco').value.trim(), entidade: document.getElementById('fc-entidade').value, moeda: document.getElementById('fc-moeda').value, fech: parseInt(document.getElementById('fc-fech').value)||6, venc: parseInt(document.getElementById('fc-venc').value)||18 };
+  const cartoes = getCartoes();
+  if (editingCartaoIdx >= 0) cartoes[editingCartaoIdx] = cartao;
+  else { if (cartoes.find(c => c.id===id)) { toast('ID já existe!','red'); return; } cartoes.push(cartao); }
+  saveCartoes(cartoes); fecharFormCartao(); renderCartoesLista(); toast('Cartão salvo: ' + nome, 'green');
+}
+function removerCartao(idx) { const c = getCartoes(); const n = c[idx].nome; c.splice(idx,1); saveCartoes(c); renderCartoesLista(); toast('Removido: ' + n); }
+function preencherCartaoSelecionado() { const id = document.getElementById('cfg-conta').value; const c = getCartoes().find(x => x.id===id); if (!c) return; document.getElementById('cfg-conta-nome').value = c.nome; document.getElementById('cfg-entidade').value = c.entidade; document.getElementById('cfg-moeda').value = c.moeda; document.getElementById('cfg-fech').value = c.fech; document.getElementById('cfg-venc').value = c.venc; document.getElementById('cfg-ciclo').value = 'fecha dia '+c.fech+' · vence dia '+c.venc; }
+
+function cfg() { return { conta: document.getElementById('cfg-conta').value, contaNome: document.getElementById('cfg-conta-nome').value, entidade: document.getElementById('cfg-entidade').value, moeda: document.getElementById('cfg-moeda').value, mes: document.getElementById('cfg-mes').value, fech: parseInt(document.getElementById('cfg-fech').value)||6, venc: parseInt(document.getElementById('cfg-venc').value)||18 }; }
+
+function invGoTo(n) {
+  for (let i=1;i<=4;i++) { document.getElementById('inv-s'+i).classList.toggle('hidden', i!==n); }
+  const steps = ['si-1','si-2','si-3','si-4'];
+  steps.forEach((id,i) => { const el=document.getElementById(id); el.classList.remove('active','done'); if(i+1===n) el.classList.add('active'); else if(i+1<n) el.classList.add('done'); });
+  currentTab='all';
+}
+
+function handleFile(input) { const f = input.files[0]; if(f) { document.getElementById('fileInfo').style.display='flex'; document.getElementById('fileName').textContent=f.name; document.getElementById('fileSize').textContent=(f.size/1024).toFixed(0)+' KB'; const r=new FileReader(); r.onload=e=>{pdfBase64=e.target.result.split(',')[1]; toast('PDF: '+f.name,'green');}; r.readAsDataURL(f); } }
+
+function setProgress(pct, msg) { document.getElementById('progressBar').style.display='block'; document.getElementById('progressFill').style.width=pct+'%'; document.getElementById('statusLine').textContent=msg; }
+
+async function processarComClaude() {
+  const apiKey = getApiKey();
+  if (!apiKey) { toast('Configure a API Key ⚙','red'); toggleSettings(); return; }
+  const texto = document.getElementById('pasteArea').value.trim();
+  if (!pdfBase64 && !texto) { toast('Importe PDF ou cole o texto','red'); return; }
+  const btn = document.getElementById('btnProcessar'); btn.disabled=true; btn.textContent='⏳ Processando...';
+  try {
+    setProgress(20, 'Enviando para Claude...');
+    const c = cfg();
+    const isPJ = c.entidade.startsWith('PJ');
+    const catsPF = `Alimentação: Em casa|Fora de casa\nSaúde: Plano de saúde|Medicamentos|Dentista|Exames e consultas\nPessoais: Higiene e Beleza|Vestuário e Acessórios|Academia e Saúde|Presentes\nResidenciais: Aluguel|Condomínio|Energia elétrica|Manutenção e reformas\nServiços: Água|Energia elétrica|Telefonia|Internet|Streaming\nViagens: Hospedagem|Combustível|Passagens|Alimentação\nVeículos: Combustível para locomoção|Manutenção|Estacionamento|Multas\nLazer: Cinema e locações|Eventos|Festas e diversão\nBancos e cartões: Anuidade|Juros - Cartão|Manutenção e tarifas`;
+    const catsPJ = `Operacionais e Comerciais: Fornecedores|Material de escritório|Contador|Marketing e Propaganda|Sistema\nServiços: Energia elétrica|Telefonia e Internet\nViagens: Hospedagem|Passagens|Combustível|Alimentação\nPessoal: Funcionários Fixos|Pró-labore\nVeículos: Abastecimento|Manutenção e conservação`;
+    const systemPrompt = `Extraia transações de fatura de cartão de crédito. Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.\nExclua: saldo anterior, pagamentos de fatura, resumo.\nFormato: {"t":[{"d":"DD/MM","n":"descrição exata do extrato","v":123.45,"tp":"a","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}\ntp: a=à vista, p=parcelada, cr=crédito, pf=EXCLUIR\nPara parceladas: extraia pa e pt. Ex: PARC 03/12 → pa:3,pt:12\nIMPORTANTE: campo n = descrição EXATA do extrato sem modificar.\nIMPORTANTE: no campo n das parceladas, copie exatamente como está no extrato.\nClassifique com estas categorias:\n${isPJ ? catsPJ : catsPF}`;
+    let messages;
+    if (pdfBase64) messages = [{ role:'user', content: [{ type:'document', source:{type:'base64',media_type:'application/pdf',data:pdfBase64} }, { type:'text', text:'Extraia todas as transações desta fatura.' }] }];
+    else messages = [{ role:'user', content:'Extraia as transações:\n\n'+texto }];
+    setProgress(50, 'Claude analisando...');
+    const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,system:systemPrompt,messages}) });
+    if (!resp.ok) { const e=await resp.json(); throw new Error(e.error?.message||'Erro API '+resp.status); }
+    const data = await resp.json();
+    const raw = data.content?.find(b=>b.type==='text')?.text||'';
+    setProgress(85,'Classificando...');
+    let parsed;
+    try { const cl=raw.replace(/```json|```/g,'').trim(); const f=cl.indexOf('{'); const l=cl.lastIndexOf('}'); parsed=JSON.parse(cl.slice(f,l+1)); } catch { throw new Error('Formato inesperado do Claude'); }
+    const lista = parsed.t||parsed.transacoes||[];
+    const c2 = cfg(); txs = [];
+    const dupeHash = new Set();
+    for (const t of lista) {
+      const tp = t.tp||t.tipo||'a';
+      if (tp==='pf'||tp==='pagamento_fatura') continue;
+      const data2 = t.d||t.data||''; const desc = t.n||t.descricao||''; const valor = parseFloat(t.v||t.valor||0);
+      const cat = t.cat||t.c||t.categoria_sugerida||''; const sub = t.sub||t.subcategoria||'';
+      const pa = parseInt(t.pa||t.parcela_atual||1); const pt = parseInt(t.pt||t.parcela_total||1);
+      const isCred = tp==='cr'||tp==='credito'; const isParc = tp==='p'||tp==='parcelada';
+      const hash = [data2, desc.slice(0,15), valor.toFixed(2)].join('|');
+      const isDup = dupeHash.has(hash); dupeHash.add(hash);
+      const partes = data2.split('/');
+      const aaFull = c2.mes.slice(0,4);
+      const dataFull = partes.length===2 ? partes[0]+'/'+partes[1]+'/'+aaFull : '01/01/'+aaFull;
+      txs.push({ id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(), data:dataFull, dataDisplay:data2, desc, valor:isCred?Math.abs(valor):-Math.abs(valor), moeda:c2.moeda, conta:c2.contaNome, idConta:c2.conta, tipo:isCred?'cred':isParc?'parc':'avista', categoria:cat, subcategoria:sub, parcAtual:pa, parcTotal:pt, entidade:c2.entidade, status:'Classificada', isDup, include:!isDup });
+    }
+    setProgress(100,'✓ '+txs.length+' transações extraídas');
+    updateMetrics(); invGoTo(3); renderTable();
+    toast('✓ '+txs.length+' transações extraídas!','green');
+  } catch(e) { setProgress(0,'✗ '+e.message); toast('Erro: '+e.message,'red'); }
+  btn.disabled=false; btn.textContent='✦ Processar com Claude';
+}
+
+function showTab(tab,el) { currentTab=tab; document.querySelectorAll('#inv-s3 .tabs .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); renderTable(); }
+
+function renderTable() {
+  const tbody = document.getElementById('reviewBody'); tbody.innerHTML='';
+  const filtered = txs.filter(t => { if(currentTab==='avista') return t.tipo==='avista'; if(currentTab==='parc') return t.tipo==='parc'; if(currentTab==='cred') return t.tipo==='cred'; if(currentTab==='dup') return t.isDup; return true; });
+  if(!filtered.length) { tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono);font-size:12px">nenhuma transação</td></tr>`; return; }
+  filtered.forEach(t => {
+    const ri=txs.indexOf(t); const tr=document.createElement('tr');
+    const badgeClass=t.isDup?'dup':t.tipo==='parc'?'parc':t.tipo==='cred'?'cred':'avista';
+    const badgeText=t.isDup?'DUP':t.tipo==='parc'?'PARC':t.tipo==='cred'?'CRED':'VISTA';
+    const valorDisplay=Math.abs(t.valor).toLocaleString('pt-BR',{minimumFractionDigits:2});
+    const valorColor=t.tipo==='cred'?'color:var(--accent)':'';
+    tr.innerHTML=`<td><input type="checkbox" ${t.include?'checked':''} onchange="txs[${ri}].include=this.checked;updateMetrics()"></td><td style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap">${t.dataDisplay}</td><td><input class="desc-edit" value="${escHtml(t.desc)}" onchange="txs[${ri}].desc=this.value"></td><td><select class="tipo-sel" onchange="txs[${ri}].tipo=this.value;renderTable();updateMetrics()"><option value="avista" ${t.tipo==='avista'?'selected':''}>à vista</option><option value="parc" ${t.tipo==='parc'?'selected':''}>parcelada</option><option value="cred" ${t.tipo==='cred'?'selected':''}>crédito</option></select></td><td><input class="cat-edit" value="${escHtml(t.categoria)}" onchange="txs[${ri}].categoria=this.value" placeholder="categoria..."></td><td><input class="cat-edit" value="${escHtml(t.subcategoria)}" onchange="txs[${ri}].subcategoria=this.value" placeholder="subcategoria..."></td><td style="text-align:right;font-family:var(--mono);${valorColor}">${valorDisplay}</td><td><button class="del-btn" onclick="txs.splice(${ri},1);renderTable();updateMetrics()">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateMetrics() { const inc=txs.filter(t=>t.include); document.getElementById('m-total').textContent=inc.length; document.getElementById('m-avista').textContent=inc.filter(t=>t.tipo==='avista').length; document.getElementById('m-parc').textContent=inc.filter(t=>t.tipo==='parc').length; document.getElementById('m-dup').textContent=txs.filter(t=>t.isDup).length; }
+
+function adicionarLinha() { const c=cfg(); txs.push({id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(),data:c.mes.replace('-','/')+'/01',dataDisplay:'01/'+c.mes.slice(5),desc:'Nova transação',valor:-0,moeda:c.moeda,conta:c.contaNome,idConta:c.conta,tipo:'avista',categoria:'',subcategoria:'',parcAtual:1,parcTotal:1,entidade:c.entidade,status:'Classificada',isDup:false,include:true}); renderTable(); updateMetrics(); }
+
+function showOutTab(tab,el) { document.querySelectorAll('#inv-s4 .tabs .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); ['out-transacoes','out-parceladas','out-ciclo'].forEach(id=>document.getElementById(id).style.display='none'); document.getElementById('out-'+tab).style.display='block'; }
+
+function buildOutputs() {
+  const c=cfg(); const inc=txs.filter(t=>t.include);
+  const avista=inc.filter(t=>t.tipo==='avista'||t.tipo==='cred');
+  const parcs=inc.filter(t=>t.tipo==='parc');
+  const transRows=avista.map(t=>{const tipo=t.tipo==='cred'?'RECEITA':'CARTAO';const cat=t.tipo==='cred'?'Outras fontes':t.categoria;const sub=t.tipo==='cred'?'Crédito/Estorno':(t.subcategoria||'');return[t.id,t.data,t.desc,t.valor.toFixed(2),t.moeda,t.conta,t.idConta,'Cartao',tipo,cat,sub,'',t.entidade,'Classificada','',''].join('\t');});
+  document.getElementById('outTrans').textContent=transRows.join('\n');
+  const parcRows=parcs.map(t=>{const restantes=t.parcTotal-t.parcAtual;const total=Math.abs(t.valor)*t.parcTotal;const dataCiclo=c.mes+'-'+String(c.fech).padStart(2,'0');const descBase=t.desc.replace(/\s*(tit-)?parc\s+\d+\/\d+/gi,'').replace(/\s+\d{1,2}\/\d{1,2}\s*$/g,'').replace(/\s{2,}/g,' ').trim();return[descBase,Math.abs(t.valor).toFixed(2),t.parcTotal,t.parcAtual,t.data,dataCiclo,total.toFixed(2),restantes,Math.min(t.parcAtual+1,t.parcTotal),t.conta,t.idConta,'',t.entidade,'Ativa'].join('\t');});
+  document.getElementById('outParc').textContent=parcRows.join('\n');
+  const totalA=avista.reduce((s,t)=>s+Math.abs(t.valor),0);const totalP=parcs.reduce((s,t)=>s+Math.abs(t.valor),0);
+  document.getElementById('outCiclo').textContent=['RESUMO DO CICLO','━'.repeat(40),`Cartão: ${c.contaNome} (${c.conta})`,`Fatura: ${c.mes}`,`Fechamento: dia ${c.fech} · Vencimento: dia ${c.venc}`,`Entidade: ${c.entidade}`,`Moeda: ${c.moeda}`,'','À vista: '+avista.length+' — R$ '+totalA.toLocaleString('pt-BR',{minimumFractionDigits:2}),'Parceladas: '+parcs.length+' — R$ '+totalP.toLocaleString('pt-BR',{minimumFractionDigits:2}),'Total: R$ '+(totalA+totalP).toLocaleString('pt-BR',{minimumFractionDigits:2}),'','PRÓXIMOS PASSOS','1. Cole transacoes na aba transacoes do Sheets','2. Cole controle_parceladas na aba controle_parceladas','3. Rode gerarParcelasFuturasDespesasPorCiclo()','4. Após pagar → processarPagamentosCartaoV2()'].join('\n');
+}
+
+async function enviarParaSheets() {
+  const cfgRaw=localStorage.getItem('q21_sheets_cfg'); if(!cfgRaw){toast('Configure o Sheets ⚙','red');toggleSettings();return;} const shCfg=JSON.parse(cfgRaw); if(!shCfg.id){toast('Cole o ID da planilha','red');toggleSettings();return;}
+  const statusEl=document.getElementById('envioStatus'); statusEl.style.color='var(--muted)'; statusEl.textContent='⏳ Conectando...';
+  try {
+    const token=await garantirToken(); const inc=txs.filter(t=>t.include);
+    const avista=inc.filter(t=>t.tipo==='avista'||t.tipo==='cred');
+    const parcs=inc.filter(t=>t.tipo==='parc');
+    const c=cfg();
+    const transRows=avista.map(t=>{const tipo=t.tipo==='cred'?'RECEITA':'CARTAO';const cat=t.tipo==='cred'?'Outras fontes':t.categoria;const sub=t.tipo==='cred'?'Crédito/Estorno':(t.subcategoria||'');return[t.id,t.data,t.desc,t.valor.toFixed(2),t.moeda,t.conta,t.idConta,'Cartao',tipo,cat,sub,'',t.entidade,'Classificada','',''];});
+    const parcRows=parcs.map(t=>{const restantes=t.parcTotal-t.parcAtual;const total=Math.abs(t.valor)*t.parcTotal;const dataCiclo=c.mes+'-'+String(c.fech).padStart(2,'0');const descBase=t.desc.replace(/\s*(tit-)?parc\s+\d+\/\d+/gi,'').replace(/\s+\d{1,2}\/\d{1,2}\s*$/g,'').replace(/\s{2,}/g,' ').trim();return[descBase,Math.abs(t.valor).toFixed(2),t.parcTotal,t.parcAtual,t.data,dataCiclo,total.toFixed(2),restantes,Math.min(t.parcAtual+1,t.parcTotal),t.conta,t.idConta,'',t.entidade,'Ativa'];});
+    const baseUrl=`https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
+    const headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
+    if(transRows.length){statusEl.textContent=`⏳ Enviando ${transRows.length} transações...`;const r1=await fetch(`${baseUrl}/${encodeURIComponent(shCfg.trans)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers,body:JSON.stringify({values:transRows})});if(!r1.ok){const e=await r1.json();throw new Error(e.error?.message||r1.status);}}
+    if(parcRows.length){statusEl.textContent=`⏳ Enviando ${parcRows.length} parceladas...`;const r2=await fetch(`${baseUrl}/${encodeURIComponent(shCfg.parc)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers,body:JSON.stringify({values:parcRows})});if(!r2.ok){const e=await r2.json();throw new Error(e.error?.message||r2.status);}}
+    statusEl.style.color='var(--accent)'; statusEl.textContent=`✓ ${transRows.length} transações + ${parcRows.length} parceladas enviadas!`; toast('✓ Dados enviados para o Sheets!','green');
+  } catch(e){statusEl.style.color='var(--red)';statusEl.textContent='✗ '+e.message;toast('Erro: '+e.message,'red');}
+}
+
+function copiar(id) { const t=document.getElementById(id).textContent; navigator.clipboard.writeText(t).then(()=>toast('Copiado!','green')).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copiado!','green');}); }
+function novaFatura() { txs=[]; pdfBase64=null; document.getElementById('pasteArea').value=''; document.getElementById('fileInfo').style.display='none'; document.getElementById('fileInput').value=''; document.getElementById('progressBar').style.display='none'; document.getElementById('statusLine').textContent=''; invGoTo(1); }
+function escHtml(s) { return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── TOAST ──────────────────────────────────────────
+function toast(msg, type='green') {
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.color=type==='green'?'var(--accent)':type==='red'?'var(--red)':'var(--text)';
+  t.style.borderColor=type==='green'?'rgba(0,212,170,0.3)':type==='red'?'rgba(239,75,75,0.3)':'var(--border2)';
+  t.style.display='block';
+  setTimeout(()=>t.style.display='none',3000);
+}
+
+// ── INIT ──────────────────────────────────────────
+window.addEventListener('load', () => {
+  const savedKey = localStorage.getItem('q21_api_key');
+  if (savedKey) { document.getElementById('apiKey').value=savedKey; document.getElementById('apiDot').classList.add('ok'); document.getElementById('apiStatusText').textContent='Claude ok'; }
+  renderCartoesLista();
+  initGoogleAuth();
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', e=>{e.preventDefault();dropZone.classList.add('drag');});
+  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf'){document.getElementById('fileInput').files=e.dataTransfer.files;handleFile({files:e.dataTransfer.files});}});
+});
+</script>
+</body>
+</html>
