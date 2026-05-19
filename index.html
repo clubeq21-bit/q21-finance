@@ -960,24 +960,25 @@ async function analisarPlanilha() {
     const despRows  = despData.values  || [];
     const recRows   = recData.values   || [];
 
+    // Descobre todas as colunas pelo cabeçalho — funciona mesmo se a estrutura mudar
     const transHeaders = transRows[0] || [];
-    const catIdx = transHeaders.indexOf('Categoria');
-    const subIdx = transHeaders.indexOf('Subcategoria');
-    const entIdx = transHeaders.indexOf('Entidade');
+    const catIdx  = transHeaders.indexOf('Categoria');
+    const subIdx  = transHeaders.indexOf('Subcategoria');
+    const entIdx  = transHeaders.indexOf('Entidade');
     const projIdx = transHeaders.indexOf('Projeto');
     const descIdx = transHeaders.indexOf('Descricao_Extrato');
-    const idIdx = transHeaders.indexOf('ID_Transacao');
+    const idIdx   = transHeaders.indexOf('ID_Transacao');
 
     const semCategoria = transRows.slice(1).filter(r => (!r[catIdx] || !r[subIdx]) && r[descIdx]);
     const semEntidade  = transRows.slice(1).filter(r => !r[entIdx] && r[descIdx]);
 
-    // Despesas sem categoria — colunas E(4)=Categoria, F(5)=Subcategoria, D(3)=Descricao
+    // Despesas — descobre colunas pelo cabeçalho automaticamente
     const despHeaders = despRows[0] || [];
-    const despDescIdx = despHeaders.indexOf('Descricao') !== -1 ? despHeaders.indexOf('Descricao') : 3;
-    const despCatIdx  = despHeaders.indexOf('Categoria') !== -1 ? despHeaders.indexOf('Categoria') : 4;
-    const despSubIdx  = despHeaders.indexOf('Subcategoria') !== -1 ? despHeaders.indexOf('Subcategoria') : 5;
-    const despIdIdx   = despHeaders.indexOf('ID_Despesa') !== -1 ? despHeaders.indexOf('ID_Despesa') : 0;
-    const despEntIdx  = despHeaders.indexOf('Entidade') !== -1 ? despHeaders.indexOf('Entidade') : 8;
+    const despDescIdx = despHeaders.indexOf('Descricao');
+    const despCatIdx  = despHeaders.indexOf('Categoria');
+    const despSubIdx  = despHeaders.indexOf('Subcategoria');
+    const despIdIdx   = despHeaders.indexOf('ID_Despesa');
+    const despEntIdx  = despHeaders.indexOf('Entidade');
     const semDespCat  = despRows.slice(1).filter(r => (!r[despCatIdx] || !r[despSubIdx]) && r[despDescIdx]);
     
     // Store for later use in showIssue
@@ -1198,11 +1199,12 @@ async function aplicarSugestoes() {
     const idIdx  = hdrs.indexOf('ID_Transacao');
     if (idIdx === -1) throw new Error('Coluna ID_Transacao não encontrada');
 
-    // Colunas: transacoes J=9,K=10,M=12 | despesas E=4,F=5,H=8
-    const isDespUpdate = aprovadas.some(s => s._sheet === 'despesas');
-    const catIdx = hdrs.indexOf('Categoria') !== -1 ? hdrs.indexOf('Categoria') : (isDespUpdate ? 4 : 9);
-    const subIdx = hdrs.indexOf('Subcategoria') !== -1 ? hdrs.indexOf('Subcategoria') : (isDespUpdate ? 5 : 10);
-    const entIdx = hdrs.indexOf('Entidade') !== -1 ? hdrs.indexOf('Entidade') : (isDespUpdate ? 8 : 12);
+    // Descobre colunas pelo cabeçalho — funciona em qualquer aba automaticamente
+    const catIdx = hdrs.indexOf('Categoria');
+    const subIdx = hdrs.indexOf('Subcategoria');
+    const entIdx = hdrs.indexOf('Entidade');
+
+    if (catIdx === -1) throw new Error(`Coluna "Categoria" não encontrada na aba ${sheetName}. Cabeçalhos: ${hdrs.join(', ')}`);
 
     console.log('Headers:', hdrs);
     console.log(`catIdx=${catIdx}(${hdrs[catIdx]}), subIdx=${subIdx}(${hdrs[subIdx]}), entIdx=${entIdx}(${hdrs[entIdx]})`);
