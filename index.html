@@ -1149,7 +1149,10 @@ async function aplicarSugestoes() {
         data.push({ range: `${sheetName}!${colLetter(entIdx+1)}${sheetRow}`, values: [[s.entidade]] });
     });
 
-    if (!data.length) throw new Error('Nenhuma linha encontrada no Sheets para atualizar');
+    console.log('Aprovadas:', aprovadas.map(s => s.id));
+    console.log('Rows IDs:', rows.slice(1,5).map(r => r[idIdx]));
+    console.log('Data pairs to update:', data.length);
+    if (!data.length) throw new Error(`Nenhuma linha encontrada. IDs buscados: ${aprovadas.map(s=>s.id).join(', ')}. Primeiros IDs no Sheets: ${rows.slice(1,4).map(r=>r[idIdx]).join(', ')}`);
 
     const updateResp = await fetch(`${baseUrl}/values:batchUpdate`, {
       method: 'POST', headers,
