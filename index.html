@@ -984,18 +984,21 @@ async function analisarPlanilha() {
 
       const prompt = `Você é o copiloto financeiro do Glendon Miranda. Classifique estas transações.
 
-Entidades: PF_BR=pessoal Brasil, PJ_BR=Q21 negócio, PF_EU=Europa, LLC_US=EUA, PJ_BR2=GMD Impacto
-Regras: viagem para evento→PJ_BR, compra pessoal→PF_BR, receita EUR→PF_EU, receita USD→LLC_US
+IMPORTANTE: use o campo "id" EXATAMENTE como fornecido — não modifique, não crie novos IDs.
 
-Categorias PF_BR: Alimentação(Em casa|Fora de casa), Saúde(Medicamentos e acessórios|Plano de saúde|Dentista e saúde bucal|Exames e consultas), Pessoais(Higiene Pessoal e Beleza|Vestuário e Acessórios|Presentes|Doações), Residenciais(Aluguel|Condomínio|Energia elétrica|Manutenção e reformas|Diarista), Serviços(Telefonia|Internet|Streaming TV e música|Água|Gás), Viagens(Hospedagem|Passagens|Combustível|Alimentação|Locações), Veículos(Combustível para locomoção|Manutenção|Estacionamento|Multas|Seguro), Lazer(Cinema e locações|Eventos esportivos e culturais|Festas, passeios e diversão), Desenvolvimento Pessoal(Cursos|Livros), Bancos e cartões(Anuidade|Juros - Cartão|Manutenção e tarifas), Investimentos e recebíveis(Aplicações financeiras|Poupança|Fundo de Reservas), Assinatura(qualquer assinatura recorrente)
+Entidades: PF_BR=pessoal Brasil, PJ_BR=Q21 negócio, PF_EU=Europa, LLC_US=EUA, PJ_BR2=GMD Impacto
+Regras: viagem para evento→PJ_BR, compra pessoal em viagem→PF_BR, receita EUR→PF_EU, receita USD→LLC_US
+Se entidade já preenchida, mantenha-a. Se vazia, infira pela descrição e conta.
+
+Categorias PF_BR: Alimentação(Em casa|Fora de casa), Saúde(Medicamentos e acessórios|Plano de saúde|Dentista e saúde bucal|Exames e consultas), Pessoais(Higiene Pessoal e Beleza|Vestuário e Acessórios|Presentes|Doações), Residenciais(Aluguel|Condomínio|Energia elétrica|Manutenção e reformas|Diarista), Serviços(Telefonia|Internet|Streaming TV e música|Água|Gás), Viagens(Hospedagem|Passagens|Combustível|Alimentação|Locações), Veículos(Combustível para locomoção|Manutenção|Estacionamento|Multas|Seguro), Lazer(Cinema e locações|Eventos esportivos e culturais|Festas, passeios e diversão), Desenvolvimento Pessoal(Cursos|Livros), Bancos e cartões(Anuidade|Juros - Cartão|Manutenção e tarifas), Investimentos e recebíveis(Aplicações financeiras|Poupança|Fundo de Reservas)
 
 Categorias PJ_BR: Operacionais e Comerciais(Marketing e Propaganda|Sistema|Contador|Fornecedores|Material de escritório|Impostos), Pessoal(Funcionários Fixos|Pró-labore), Viagens(Hospedagem|Passagens|Combustível|Alimentação), Serviços(Energia elétrica|Telefonia e Internet|Água), Veículos(Abastecimento|Manutenção e conservação|Multas), Bancos e cartões(Juros - Cartão|Manutenção e tarifas)
 
-Transações para classificar:
-${JSON.stringify(batch.map(r => ({ id: r[idIdx], desc: r[descIdx], entidade: r[entIdx] || '', conta: r[idIdx+6] || '' })))}
+Transações (use o id EXATAMENTE como está):
+${JSON.stringify(batch.map(r => ({ id: r[idIdx], desc: r[descIdx], entidade: r[entIdx] || '', conta: r[idIdx > 0 ? idIdx+6 : 6] || '' })))}
 
-Retorne JSON puro sem markdown:
-{"sugestoes":[{"id":"TX_...","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","confianca":"alta"}]}`;
+Retorne JSON puro sem markdown. Use os IDs exatamente como fornecidos:
+{"sugestoes":[{"id":"EXATO_ID_DA_LINHA","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","confianca":"alta"}]}`;
 
       try {
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1119,40 +1122,49 @@ async function aplicarSugestoes() {
     const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
     const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}`;
 
-    // First get the full sheet to find row indices
     const sheetName = shCfg.trans || 'transacoes';
-    const dataResp = await fetch(`${baseUrl}/values/${encodeURIComponent(sheetName)}!A1:P1000`, { headers: { Authorization: 'Bearer ' + token } });
+    // Get full sheet data
+    const dataResp = await fetch(`${baseUrl}/values/${encodeURIComponent(sheetName)}!A1:P2000`, { headers: { Authorization: 'Bearer ' + token } });
     const dataJson = await dataResp.json();
     const rows = dataJson.values || [];
     const hdrs = rows[0] || [];
 
     const idIdx  = hdrs.indexOf('ID_Transacao');
-    const catIdx = hdrs.indexOf('Categoria');
-    const subIdx = hdrs.indexOf('Subcategoria');
-    const entIdx = hdrs.indexOf('Entidade');
-
     if (idIdx === -1) throw new Error('Coluna ID_Transacao não encontrada');
 
-    // Build batch update requests
-    const data = [];
-    aprovadas.forEach(s => {
-      // Find the row with this ID
-      const rowIdx = rows.findIndex((r, i) => i > 0 && r[idIdx] === s.id);
-      if (rowIdx === -1) return;
-      const sheetRow = rowIdx + 1; // 1-based
+    // Colunas fixas conforme estrutura da planilha
+    // J=Categoria(9), K=Subcategoria(10), M=Entidade(12) — 0-based
+    const catIdx = hdrs.indexOf('Categoria') !== -1 ? hdrs.indexOf('Categoria') : 9;
+    const subIdx = hdrs.indexOf('Subcategoria') !== -1 ? hdrs.indexOf('Subcategoria') : 10;
+    const entIdx = hdrs.indexOf('Entidade') !== -1 ? hdrs.indexOf('Entidade') : 12;
 
-      if (catIdx !== -1 && s.categoria)
+    console.log('Headers:', hdrs);
+    console.log(`catIdx=${catIdx}(${hdrs[catIdx]}), subIdx=${subIdx}(${hdrs[subIdx]}), entIdx=${entIdx}(${hdrs[entIdx]})`);
+
+    // Build ID → row number map
+    const idToRow = {};
+    rows.forEach((r, i) => { if (i > 0 && r[idIdx]) idToRow[r[idIdx].trim()] = i + 1; });
+
+    console.log('Total rows in sheet:', rows.length - 1);
+    console.log('Sample IDs in sheet:', Object.keys(idToRow).slice(0,5));
+    console.log('Sample IDs from Claude:', aprovadas.slice(0,5).map(s => s.id));
+
+    const data = [];
+    let found = 0, notFound = 0;
+    aprovadas.forEach(s => {
+      const sheetRow = idToRow[s.id?.trim()];
+      if (!sheetRow) { notFound++; return; }
+      found++;
+      if (s.categoria)
         data.push({ range: `${sheetName}!${colLetter(catIdx+1)}${sheetRow}`, values: [[s.categoria]] });
-      if (subIdx !== -1 && s.subcategoria)
+      if (s.subcategoria)
         data.push({ range: `${sheetName}!${colLetter(subIdx+1)}${sheetRow}`, values: [[s.subcategoria]] });
-      if (entIdx !== -1 && s.entidade)
+      if (s.entidade)
         data.push({ range: `${sheetName}!${colLetter(entIdx+1)}${sheetRow}`, values: [[s.entidade]] });
     });
 
-    console.log('Aprovadas:', aprovadas.map(s => s.id));
-    console.log('Rows IDs:', rows.slice(1,5).map(r => r[idIdx]));
-    console.log('Data pairs to update:', data.length);
-    if (!data.length) throw new Error(`Nenhuma linha encontrada. IDs buscados: ${aprovadas.map(s=>s.id).join(', ')}. Primeiros IDs no Sheets: ${rows.slice(1,4).map(r=>r[idIdx]).join(', ')}`);
+    console.log(`Found: ${found}, Not found: ${notFound}, Updates: ${data.length}`);
+    if (!data.length) throw new Error(`Nenhuma atualização gerada. Found=${found}, NotFound=${notFound}. Verifique o Console.`);
 
     const updateResp = await fetch(`${baseUrl}/values:batchUpdate`, {
       method: 'POST', headers,
