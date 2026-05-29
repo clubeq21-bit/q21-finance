@@ -643,6 +643,15 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       <div class="card-title">recebíveis em aberto (próximos 30 dias)</div>
       <div id="dashRecebiveis"></div>
     </div>
+
+    <!-- Inadimplência -->
+    <div class="card" style="margin-top:1rem;border-color:rgba(239,75,75,0.2)">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span style="color:var(--red)">⚠ inadimplência — parcelas vencidas não pagas</span>
+        <span id="inadTotalBadge" style="font-family:var(--mono);font-size:11px;color:var(--red)"></span>
+      </div>
+      <div id="dashInadimplencia"></div>
+    </div>
   </div>
 </div>
 
@@ -1551,7 +1560,7 @@ async function loadDashboard() {
       cliente: rH.indexOf('Cliente'), 
       valor:   rH.indexOf('Valor_Parcela'),
       moeda:   rH.indexOf('Moeda'),
-      venc:    rH.indexOf('Vencimento'), 
+      venc:    rH.indexOf('Vencimento') !== -1 ? rH.indexOf('Vencimento') : 9, 
       status:  rH.indexOf('Status_Parcela'),
       ent:     rH.indexOf('Entidade'),
       prod:    rH.indexOf('Produto')
@@ -1563,8 +1572,7 @@ async function loadDashboard() {
     const mesSel = document.getElementById('dashMes').value;
 
     // Populate month selector
-    // Coleta todos os meses únicos de todas as fontes de data
-    const meses = new Set();
+    // Extrai mês de qualquer formato de data
     function extractMesFromDate(d) {
       if (!d) return '';
       const s = String(d).trim();
@@ -1575,8 +1583,6 @@ async function loadDashboard() {
           const mm = p[1].padStart(2,'0');
           if (yyyy.length === 4 && !isNaN(parseInt(yyyy))) return yyyy + '/' + mm;
         }
-        // DD/MM sem ano — ignora
-        if (p.length === 2) return '';
       } else if (s.includes('-')) {
         const yyyy = s.slice(0,4);
         const mm = s.slice(5,7);
@@ -1584,10 +1590,27 @@ async function loadDashboard() {
       }
       return '';
     }
-    // Lê de transacoes E de recebiveis para pegar todos os meses
-    [...transRows.slice(1), ...recRows.slice(1)].forEach(r => {
-      const d = r[tIdx.data !== undefined ? tIdx.data : 1];
-      const m = extractMesFromDate(d);
+
+    // Coleta meses de TODAS as abas
+    const meses = new Set();
+
+    // transacoes — coluna Data
+    transRows.slice(1).forEach(r => {
+      const m = extractMesFromDate(r[tIdx.data]);
+      if (m) meses.add(m);
+    });
+
+    // recebiveis — coluna Vencimento (J = índice 9)
+    const rVencIdx = rH.indexOf('Vencimento') !== -1 ? rH.indexOf('Vencimento') : 9;
+    recRows.slice(1).forEach(r => {
+      const m = extractMesFromDate(r[rVencIdx]);
+      if (m) meses.add(m);
+    });
+
+    // despesas — coluna Vencimento
+    const dVencIdx = dH.indexOf('Vencimento') !== -1 ? dH.indexOf('Vencimento') : 11;
+    despRows.slice(1).forEach(r => {
+      const m = extractMesFromDate(r[dVencIdx]);
       if (m) meses.add(m);
     });
     const sel = document.getElementById('dashMes');
@@ -1722,43 +1745,151 @@ async function loadDashboard() {
     document.getElementById('dashProjetos').innerHTML = renderBarChart(Object.fromEntries(projSorted), 'purple', fmt);
 
     // ── RECEBÍVEIS EM ABERTO (próximos 30 dias) por moeda
-    const recAberto = recRows.slice(1).filter(r => {
+    // ── PROJEÇÃO DE RECEBÍVEIS
+    // Todas as parcelas Previstas e Vencidas = o que ainda vai entrar no caixa
+    const todasPrevistas = recRows.slice(1).filter(r => {
       const status = String(r[rIdx.status]||'').trim();
-      const venc = parseDate(r[rIdx.venc]);
-      return (status === 'Prevista' || status === 'Vencida') && venc && venc <= em30;
+      return status === 'Prevista' || status === 'Vencida';
     });
 
-    // Agrupar por moeda
-    const recByMoeda = { BRL: 0, EUR: 0, USD: 0 };
-    const recByCliente = {};
-    recAberto.forEach(r => {
+    if (mesSel === 'all') {
+      // Visão geral: total previsto por mês (projeção futura)
+      const recByMes = {};
+      const recByMoedaTotal = { BRL: 0, EUR: 0, USD: 0 };
+
+      todasPrevistas.forEach(r => {
+        const mes   = extractMesFromDate(r[rIdx.venc]);
+        const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
+        const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
+        if (!isNaN(val) && val > 0 && mes) {
+          if (!recByMes[mes]) recByMes[mes] = { BRL:0, EUR:0, USD:0 };
+          recByMes[mes][moeda] = (recByMes[mes][moeda]||0) + val;
+          recByMoedaTotal[moeda] = (recByMoedaTotal[moeda]||0) + val;
+        }
+      });
+
+      const mesSorted = Object.entries(recByMes).sort((a,b) => a[0].localeCompare(b[0]));
+      
+      const totalSummary = Object.entries(recByMoedaTotal)
+        .filter(([,v]) => v > 0)
+        .map(([m,v]) => {
+          const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
+                      : m === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                      : fmt(v);
+          return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid rgba(0,212,170,0.2);font-family:var(--mono);font-size:11px;margin-right:6px;background:rgba(0,212,170,0.05)"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
+        }).join('');
+
+      document.getElementById('dashRecebiveis').innerHTML = mesSorted.length ? `
+        <div style="margin-bottom:12px">
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">TOTAL PREVISTO</span>
+          <div style="margin-top:6px">${totalSummary}</div>
+        </div>
+        ${mesSorted.map(([mes, vals]) => {
+          const parts = [];
+          if (vals.BRL > 0) parts.push(fmt(vals.BRL));
+          if (vals.EUR > 0) parts.push(`€ ${vals.EUR.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+          if (vals.USD > 0) parts.push(`$ ${vals.USD.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+          return renderRow(mes, parts.join(' + '), 'green');
+        }).join('')}
+      ` : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível previsto ✓</div>';
+
+    } else {
+      // Mês específico: quem paga naquele mês
+      const recDoMes = todasPrevistas.filter(r => extractMesFromDate(r[rIdx.venc]) === mesSel);
+      const recByCliente = {};
+      const recByMoeda = { BRL: 0, EUR: 0, USD: 0 };
+
+      recDoMes.forEach(r => {
+        const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
+        const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
+        const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
+        if (!isNaN(val) && val > 0) {
+          recByMoeda[moeda] = (recByMoeda[moeda]||0) + val;
+          const key = cli + (moeda !== 'BRL' ? ` (${moeda})` : '');
+          recByCliente[key] = (recByCliente[key]||0) + val;
+        }
+      });
+
+      const moedaSummary = Object.entries(recByMoeda)
+        .filter(([,v]) => v > 0)
+        .map(([m,v]) => {
+          const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
+                      : m === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                      : fmt(v);
+          return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid rgba(0,212,170,0.2);font-family:var(--mono);font-size:11px;margin-right:6px;background:rgba(0,212,170,0.05)"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
+        }).join('');
+
+      const recSorted = Object.entries(recByCliente).sort((a,b)=>b[1]-a[1]);
+      document.getElementById('dashRecebiveis').innerHTML = recSorted.length
+        ? `${moedaSummary ? `<div style="margin-bottom:12px">${moedaSummary}</div>` : ''}` 
+          + recSorted.map(([k,v]) => renderRow(k, k.includes('EUR') ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : k.includes('USD') ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : fmt(v), 'green')).join('')
+        : `<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível previsto para ${mesSel}</div>`;
+    }
+
+    // ── INADIMPLÊNCIA — parcelas Vencidas não pagas
+    const vencidas = recRows.slice(1).filter(r => {
+      const status = String(r[rIdx.status]||'').trim();
+      return status === 'Vencida';
+    });
+
+    // Agrupar por cliente
+    const inadByCliente = {};
+    vencidas.forEach(r => {
       const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
       const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
       const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
+      const venc  = String(r[rIdx.venc]||'').trim();
       if (!isNaN(val) && val > 0) {
-        recByMoeda[moeda] = (recByMoeda[moeda]||0) + val;
-        const key = cli + (moeda !== 'BRL' ? ` (${moeda})` : '');
-        recByCliente[key] = (recByCliente[key]||0) + val;
+        if (!inadByCliente[cli]) inadByCliente[cli] = { total: 0, moeda, parcelas: 0, ultimoVenc: venc };
+        inadByCliente[cli].total += val;
+        inadByCliente[cli].parcelas++;
+        if (venc > inadByCliente[cli].ultimoVenc) inadByCliente[cli].ultimoVenc = venc;
       }
     });
 
-    // Total por moeda
-    const moedaSummary = Object.entries(recByMoeda)
-      .filter(([,v]) => v > 0)
-      .map(([m,v]) => {
-        const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
-                    : m === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
-                    : fmt(v);
-        return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid var(--border2);font-family:var(--mono);font-size:11px;margin-right:6px"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
-      }).join('');
+    const inadSorted = Object.entries(inadByCliente).sort((a,b) => b[1].total - a[1].total);
+    const totalInad = inadSorted.reduce((s,[,v]) => s + v.total, 0);
+    const totalInadEUR = inadSorted.filter(([,v]) => v.moeda === 'EUR').reduce((s,[,v]) => s + v.total, 0);
+    const totalInadUSD = inadSorted.filter(([,v]) => v.moeda === 'USD').reduce((s,[,v]) => s + v.total, 0);
+    const totalInadBRL = inadSorted.filter(([,v]) => v.moeda === 'BRL').reduce((s,[,v]) => s + v.total, 0);
 
-    const recSorted = Object.entries(recByCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    document.getElementById('dashRecebiveis').innerHTML = recSorted.length
-      ? `${moedaSummary ? `<div style="margin-bottom:12px">${moedaSummary}</div>` : ''}` + recSorted.map(([k,v]) => renderRow(k, recByCliente[k] ? (k.includes('EUR') ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : k.includes('USD') ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : fmt(v)) : fmt(v), 'green')).join('')
-      : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível em aberto nos próximos 30 dias ✓</div>';
+    const inadBadgeParts = [];
+    if (totalInadBRL > 0) inadBadgeParts.push(fmt(totalInadBRL));
+    if (totalInadEUR > 0) inadBadgeParts.push(`€ ${totalInadEUR.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+    if (totalInadUSD > 0) inadBadgeParts.push(`$ ${totalInadUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+
+    document.getElementById('inadTotalBadge').textContent = inadBadgeParts.length ? inadBadgeParts.join(' + ') : '';
+
+    document.getElementById('dashInadimplencia').innerHTML = inadSorted.length ? `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Mentorado</th>
+              <th style="text-align:center;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Parcelas</th>
+              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Último venc.</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Total em atraso</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${inadSorted.map(([cli, d]) => {
+              const valFmt = d.moeda === 'EUR' ? `€ ${d.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
+                           : d.moeda === 'USD' ? `$ ${d.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                           : fmt(d.total);
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:10px 10px;color:var(--text)">${cli}</td>
+                <td style="padding:10px 10px;text-align:center;font-family:var(--mono);color:var(--red)">${d.parcelas}x</td>
+                <td style="padding:10px 10px;font-family:var(--mono);color:var(--muted);font-size:11px">${d.ultimoVenc}</td>
+                <td style="padding:10px 10px;text-align:right;font-family:var(--mono);color:var(--red);font-weight:500">${valFmt}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : '<div style="color:var(--accent);font-size:12px;padding:8px">✓ Nenhuma parcela em atraso!</div>';
 
     const mesLabel = mesSel === 'all' ? 'todos os meses' : mesSel;
-    document.getElementById('dashSub').textContent = `Dados de ${mesLabel} — ${transRows.length-1} transações · atualizado agora`;
+    document.getElementById('dashSub').textContent = `Dados de ${mesLabel} — ${transRows.length-1} transações · ${inadSorted.length} inadimplentes · atualizado agora`;
 
   } catch(e) {
     document.getElementById('dashSub').textContent = '✗ Erro: ' + e.message;
