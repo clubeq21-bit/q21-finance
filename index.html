@@ -1547,7 +1547,13 @@ async function loadDashboard() {
 
     const tIdx = { data: tH.indexOf('Data'), valor: tH.indexOf('Valor'), tipo: tH.indexOf('Tipo'), cat: tH.indexOf('Categoria'), sub: tH.indexOf('Subcategoria'), ent: tH.indexOf('Entidade'), proj: tH.indexOf('Projeto'), status: tH.indexOf('Status') };
     const dIdx = { desc: dH.indexOf('Descricao'), cat: dH.indexOf('Categoria'), ent: dH.indexOf('Entidade'), proj: dH.indexOf('Projeto'), valor: dH.indexOf('Valor_Parcela'), venc: dH.indexOf('Vencimento'), status: dH.indexOf('Status'), conta: dH.indexOf('ID_Conta') };
-    const rIdx = { cliente: rH.indexOf('Cliente'), valor: rH.indexOf('Valor_Parcela'), venc: rH.indexOf('Vencimento'), status: rH.indexOf('Status_Parcela'), ent: rH.indexOf('Entidade') };
+    const rIdx = { 
+      cliente: rH.indexOf('Cliente'), 
+      valor:   rH.indexOf('Valor_Parcela') !== -1 ? rH.indexOf('Valor_Parcela') : rH.indexOf('valorParcelas'),
+      venc:    rH.indexOf('Vencimento'), 
+      status:  rH.indexOf('Status_Parcela') !== -1 ? rH.indexOf('Status_Parcela') : rH.indexOf('Status'),
+      ent:     rH.indexOf('Entidade') 
+    };
 
     // Get selected month filter
     const mesSel = document.getElementById('dashMes').value;
@@ -1556,11 +1562,22 @@ async function loadDashboard() {
     const meses = new Set();
     transRows.slice(1).forEach(r => {
       const d = r[tIdx.data];
-      if (d) {
-        const parts = String(d).split('/');
-        if (parts.length === 3) meses.add(parts[2] + '/' + parts[1]);
-        else if (String(d).includes('-')) meses.add(String(d).slice(0,7));
+      if (!d) return;
+      const s = String(d).trim();
+      let yyyy = '', mm = '';
+      if (s.includes('/')) {
+        const p = s.split('/');
+        if (p.length === 3) {
+          // DD/MM/YYYY or DD/MM/YY
+          yyyy = p[2].length === 2 ? '20' + p[2] : p[2];
+          mm = p[1].padStart(2,'0');
+        }
+      } else if (s.includes('-')) {
+        // YYYY-MM-DD
+        yyyy = s.slice(0,4);
+        mm = s.slice(5,7);
       }
+      if (yyyy && mm && yyyy.length === 4) meses.add(yyyy + '/' + mm);
     });
     const sel = document.getElementById('dashMes');
     const cur = sel.value;
@@ -1568,10 +1585,23 @@ async function loadDashboard() {
       Array.from(meses).sort().reverse().map(m => `<option value="${m}" ${cur===m?'selected':''}>${m}</option>`).join('');
 
     // Filter function
+    function extractMes(dateStr) {
+      const s = String(dateStr || '').trim();
+      if (s.includes('/')) {
+        const p = s.split('/');
+        if (p.length === 3) {
+          const yyyy = p[2].length === 2 ? '20' + p[2] : p[2];
+          return yyyy + '/' + p[1].padStart(2,'0');
+        }
+      } else if (s.includes('-')) {
+        return s.slice(0,4) + '/' + s.slice(5,7);
+      }
+      return '';
+    }
+
     function matchMes(dateStr) {
       if (mesSel === 'all') return true;
-      const s = String(dateStr || '');
-      return s.includes(mesSel.split('/').reverse().join('-')) || s.includes(mesSel);
+      return extractMes(dateStr) === mesSel;
     }
 
     const hoje = new Date();
@@ -1581,10 +1611,12 @@ async function loadDashboard() {
       if (!s) return null;
       if (s instanceof Date) return s;
       const str = String(s).trim();
-      const p = str.split('/');
-      if (p.length === 3) {
-        const y = p[2].length === 2 ? '20'+p[2] : p[2];
-        return new Date(parseInt(y), parseInt(p[1])-1, parseInt(p[0]));
+      if (str.includes('/')) {
+        const p = str.split('/');
+        if (p.length === 3) {
+          const y = p[2].length === 2 ? '20'+p[2] : p[2];
+          return new Date(parseInt(y), parseInt(p[1])-1, parseInt(p[0]));
+        }
       }
       const d = new Date(str);
       return isNaN(d) ? null : d;
