@@ -404,6 +404,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       <button class="nav-btn active" onclick="showPage('home')" id="nav-home">Início</button>
       <button class="nav-btn" onclick="showPage('invoices')" id="nav-invoices">Faturas</button>
       <button class="nav-btn" onclick="showPage('review')" id="nav-review">Revisão</button>
+      <button class="nav-btn" onclick="showPage('dashboard'); loadDashboard()" id="nav-dashboard">Dashboard</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
       <div class="nav-btn" id="apiStatusBadge"><div class="dot" id="apiDot"></div><span id="apiStatusText">sem API</span></div>
       <div class="nav-btn" id="sheetsStatusBadge"><div class="dot" id="sheetsDot"></div><span id="sheetsStatusText">sem Sheets</span></div>
@@ -579,6 +580,68 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
           <div class="empty-state"><div class="icon" style="font-size:60px">📊</div><p>Seu copiloto financeiro está pronto.<br>Analise a planilha para ver sugestões de melhoria.</p></div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD PAGE -->
+<div class="page" id="page-dashboard">
+  <div class="page-inner" style="max-width:1100px">
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="page-title">Dashboard financeiro</div>
+        <div class="page-sub" id="dashSub">Carregando dados...</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="dashMes" onchange="loadDashboard()" style="width:auto;font-family:var(--mono);font-size:12px;padding:6px 10px">
+          <option value="all">Todos os meses</option>
+        </select>
+        <button class="btn" onclick="loadDashboard()" style="font-size:12px">↺ Atualizar</button>
+      </div>
+    </div>
+
+    <!-- KPIs principais -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem" id="dashKpis">
+      <div class="metric"><div class="metric-label">receita do mês</div><div class="metric-value green" id="kpiReceita">—</div></div>
+      <div class="metric"><div class="metric-label">despesas pagas</div><div class="metric-value amber" id="kpiDespesas">—</div></div>
+      <div class="metric"><div class="metric-label">saldo líquido</div><div class="metric-value" id="kpiSaldo">—</div></div>
+      <div class="metric"><div class="metric-label">comprometido futuro</div><div class="metric-value red" id="kpiFuturo">—</div></div>
+    </div>
+
+    <!-- Por entidade -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div class="card">
+        <div class="card-title">receitas por entidade</div>
+        <div id="dashRecEntidade"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">despesas por entidade</div>
+        <div id="dashDespEntidade"></div>
+      </div>
+    </div>
+
+    <!-- Por categoria e parcelas futuras -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div class="card">
+        <div class="card-title">top categorias de despesa</div>
+        <div id="dashCategorias"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">parcelas vencendo em 30 dias</div>
+        <div id="dashParcelas"></div>
+      </div>
+    </div>
+
+    <!-- Por projeto -->
+    <div class="card">
+      <div class="card-title">investimento por projeto</div>
+      <div id="dashProjetos"></div>
+    </div>
+
+    <!-- Recebíveis em aberto -->
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title">recebíveis em aberto (próximos 30 dias)</div>
+      <div id="dashRecebiveis"></div>
     </div>
   </div>
 </div>
@@ -1451,6 +1514,225 @@ async function enviarParaSheets() {
 function copiar(id) { const t=document.getElementById(id).textContent; navigator.clipboard.writeText(t).then(()=>toast('Copiado!','green')).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copiado!','green');}); }
 function novaFatura() { txs=[]; pdfBase64=null; document.getElementById('pasteArea').value=''; document.getElementById('fileInfo').style.display='none'; document.getElementById('fileInput').value=''; document.getElementById('progressBar').style.display='none'; document.getElementById('statusLine').textContent=''; invGoTo(1); }
 function escHtml(s) { return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── DASHBOARD ──────────────────────────────────────────
+let dashData = null;
+
+async function loadDashboard() {
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
+
+  document.getElementById('dashSub').textContent = '⏳ Carregando dados...';
+
+  try {
+    const token = await garantirToken();
+    const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
+    const hdrs = { Authorization: 'Bearer ' + token };
+
+    const [transR, despR, recR] = await Promise.all([
+      fetch(`${baseUrl}/transacoes!A1:P2000`, { headers: hdrs }),
+      fetch(`${baseUrl}/despesas!A1:V500`, { headers: hdrs }),
+      fetch(`${baseUrl}/recebiveis!A1:R500`, { headers: hdrs })
+    ]);
+    const [transJson, despJson, recJson] = await Promise.all([transR.json(), despR.json(), recR.json()]);
+
+    const transRows = transJson.values || [];
+    const despRows  = despJson.values  || [];
+    const recRows   = recJson.values   || [];
+
+    // Parse headers
+    const tH = transRows[0] || [];
+    const dH = despRows[0]  || [];
+    const rH = recRows[0]   || [];
+
+    const tIdx = { data: tH.indexOf('Data'), valor: tH.indexOf('Valor'), tipo: tH.indexOf('Tipo'), cat: tH.indexOf('Categoria'), sub: tH.indexOf('Subcategoria'), ent: tH.indexOf('Entidade'), proj: tH.indexOf('Projeto'), status: tH.indexOf('Status') };
+    const dIdx = { desc: dH.indexOf('Descricao'), cat: dH.indexOf('Categoria'), ent: dH.indexOf('Entidade'), proj: dH.indexOf('Projeto'), valor: dH.indexOf('Valor_Parcela'), venc: dH.indexOf('Vencimento'), status: dH.indexOf('Status'), conta: dH.indexOf('ID_Conta') };
+    const rIdx = { cliente: rH.indexOf('Cliente'), valor: rH.indexOf('Valor_Parcela'), venc: rH.indexOf('Vencimento'), status: rH.indexOf('Status_Parcela'), ent: rH.indexOf('Entidade') };
+
+    // Get selected month filter
+    const mesSel = document.getElementById('dashMes').value;
+
+    // Populate month selector
+    const meses = new Set();
+    transRows.slice(1).forEach(r => {
+      const d = r[tIdx.data];
+      if (d) {
+        const parts = String(d).split('/');
+        if (parts.length === 3) meses.add(parts[2] + '/' + parts[1]);
+        else if (String(d).includes('-')) meses.add(String(d).slice(0,7));
+      }
+    });
+    const sel = document.getElementById('dashMes');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">Todos os meses</option>' +
+      Array.from(meses).sort().reverse().map(m => `<option value="${m}" ${cur===m?'selected':''}>${m}</option>`).join('');
+
+    // Filter function
+    function matchMes(dateStr) {
+      if (mesSel === 'all') return true;
+      const s = String(dateStr || '');
+      return s.includes(mesSel.split('/').reverse().join('-')) || s.includes(mesSel);
+    }
+
+    const hoje = new Date();
+    const em30 = new Date(hoje); em30.setDate(hoje.getDate() + 30);
+
+    function parseDate(s) {
+      if (!s) return null;
+      if (s instanceof Date) return s;
+      const str = String(s).trim();
+      const p = str.split('/');
+      if (p.length === 3) {
+        const y = p[2].length === 2 ? '20'+p[2] : p[2];
+        return new Date(parseInt(y), parseInt(p[1])-1, parseInt(p[0]));
+      }
+      const d = new Date(str);
+      return isNaN(d) ? null : d;
+    }
+
+    function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function fmtEur(n) { return '€ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
+    function fmtUsd(n) { return '$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
+
+    // ── RECEITAS (transacoes onde Tipo = RECEITA ou Valor > 0)
+    const receitas = transRows.slice(1).filter(r => {
+      const tipo = String(r[tIdx.tipo]||'').toUpperCase();
+      const valor = parseFloat(r[tIdx.valor]||0);
+      return matchMes(r[tIdx.data]) && (tipo === 'RECEITA' || valor > 0);
+    });
+
+    // ── DESPESAS PAGAS (transacoes onde Tipo = CARTAO/DESPESA e Valor < 0)
+    const despPagas = transRows.slice(1).filter(r => {
+      const tipo = String(r[tIdx.tipo]||'').toUpperCase();
+      const valor = parseFloat(r[tIdx.valor]||0);
+      return matchMes(r[tIdx.data]) && (tipo === 'CARTAO' || tipo === 'DESPESA') && valor < 0;
+    });
+
+    const totalReceita  = receitas.reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
+    const totalDespesas = despPagas.reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
+    const saldo = totalReceita - totalDespesas;
+
+    // ── PARCELAS FUTURAS (despesas Previstas vencendo em 30 dias)
+    const parcFuturas = despRows.slice(1).filter(r => {
+      const status = String(r[dIdx.status]||'').trim();
+      const venc = parseDate(r[dIdx.venc]);
+      return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
+    });
+    const totalFuturo = parcFuturas.reduce((s,r) => s + Math.abs(parseFloat(r[dIdx.valor]||0)), 0);
+
+    // Update KPIs
+    document.getElementById('kpiReceita').textContent = fmt(totalReceita);
+    document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
+    const saldoEl = document.getElementById('kpiSaldo');
+    saldoEl.textContent = fmt(saldo);
+    saldoEl.className = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
+    document.getElementById('kpiFuturo').textContent = fmt(totalFuturo);
+
+    // ── RECEITAS POR ENTIDADE
+    const recByEnt = {};
+    receitas.forEach(r => {
+      const ent = r[tIdx.ent] || 'Sem entidade';
+      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
+      recByEnt[ent] = (recByEnt[ent]||0) + val;
+    });
+    document.getElementById('dashRecEntidade').innerHTML = renderBarChart(recByEnt, 'green', fmt);
+
+    // ── DESPESAS POR ENTIDADE
+    const despByEnt = {};
+    despPagas.forEach(r => {
+      const ent = r[tIdx.ent] || 'Sem entidade';
+      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
+      despByEnt[ent] = (despByEnt[ent]||0) + val;
+    });
+    document.getElementById('dashDespEntidade').innerHTML = renderBarChart(despByEnt, 'amber', fmt);
+
+    // ── TOP CATEGORIAS
+    const catMap = {};
+    despPagas.forEach(r => {
+      const cat = r[tIdx.cat] || 'Sem categoria';
+      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
+      catMap[cat] = (catMap[cat]||0) + val;
+    });
+    const topCats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0,8);
+    const catObj = Object.fromEntries(topCats);
+    document.getElementById('dashCategorias').innerHTML = renderBarChart(catObj, 'purple', fmt);
+
+    // ── PARCELAS VENCENDO EM 30 DIAS
+    const parcGrp = {};
+    parcFuturas.forEach(r => {
+      const desc = String(r[dIdx.desc]||'').replace(/\s+\d+\/\d+$/,'').trim();
+      const val = Math.abs(parseFloat(r[dIdx.valor]||0));
+      parcGrp[desc] = (parcGrp[desc]||0) + val;
+    });
+    const parcSorted = Object.entries(parcGrp).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    document.getElementById('dashParcelas').innerHTML = parcSorted.length
+      ? parcSorted.map(([k,v]) => renderRow(k, fmt(v), 'red')).join('')
+      : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhuma parcela vencendo em 30 dias ✓</div>';
+
+    // ── POR PROJETO
+    const projMap = {};
+    despPagas.forEach(r => {
+      const proj = r[tIdx.proj] || 'Sem projeto';
+      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
+      projMap[proj] = (projMap[proj]||0) + val;
+    });
+    const projSorted = Object.entries(projMap).sort((a,b)=>b[1]-a[1]);
+    document.getElementById('dashProjetos').innerHTML = renderBarChart(Object.fromEntries(projSorted), 'purple', fmt);
+
+    // ── RECEBÍVEIS EM ABERTO
+    const recAberto = recRows.slice(1).filter(r => {
+      const status = String(r[rIdx.status]||'').trim();
+      const venc = parseDate(r[rIdx.venc]);
+      return (status === 'Prevista' || status === 'Vencida') && venc && venc <= em30;
+    });
+    const recByCliente = {};
+    recAberto.forEach(r => {
+      const cli = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
+      const val = Math.abs(parseFloat(r[rIdx.valor]||0));
+      recByCliente[cli] = (recByCliente[cli]||0) + val;
+    });
+    const recSorted = Object.entries(recByCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    document.getElementById('dashRecebiveis').innerHTML = recSorted.length
+      ? recSorted.map(([k,v]) => renderRow(k, fmt(v), 'green')).join('')
+      : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível em aberto nos próximos 30 dias</div>';
+
+    const mesLabel = mesSel === 'all' ? 'todos os meses' : mesSel;
+    document.getElementById('dashSub').textContent = `Dados de ${mesLabel} — ${transRows.length-1} transações · atualizado agora`;
+
+  } catch(e) {
+    document.getElementById('dashSub').textContent = '✗ Erro: ' + e.message;
+    toast('Erro ao carregar dashboard: ' + e.message, 'red');
+  }
+}
+
+function renderBarChart(data, color, fmtFn) {
+  const entries = Object.entries(data).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) return '<div style="color:var(--muted);font-size:12px;padding:8px">Sem dados</div>';
+  const max = entries[0][1];
+  const colors = { green: 'var(--accent)', amber: 'var(--amber)', red: 'var(--red)', purple: 'var(--purple)', blue: 'var(--accent2)' };
+  const c = colors[color] || 'var(--accent)';
+  return entries.map(([label, val]) => {
+    const pct = max > 0 ? (val/max*100).toFixed(1) : 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">
+        <span style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%">${label}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:${c}">${fmtFn(val)}</span>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:99px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${c};border-radius:99px;transition:width 0.6s ease"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderRow(label, value, color) {
+  const colors = { green: 'var(--accent)', amber: 'var(--amber)', red: 'var(--red)', purple: 'var(--purple)' };
+  const c = colors[color] || 'var(--accent)';
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
+    <span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${label}</span>
+    <span style="font-family:var(--mono);font-size:11px;color:${c};flex-shrink:0">${value}</span>
+  </div>`;
+}
 
 // ── TOAST ──────────────────────────────────────────
 function toast(msg, type='green') {
