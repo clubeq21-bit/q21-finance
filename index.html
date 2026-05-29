@@ -1053,10 +1053,152 @@ async function analisarPlanilha() {
     const despEntIdx  = despHeaders.indexOf('Entidade');
     const despProjIdx = despHeaders.indexOf('Projeto');
     const semDespCat  = despRows.slice(1).filter(r => (!r[despCatIdx] || !r[despSubIdx]) && r[despDescIdx]);
+
+    // Projetos — transações e despesas sem projeto ou com nome inconsistente
+    const PROJETOS_VALIDOS = ['Q21 Elite','Business Impact','GMD Impacto','Mastery','Administrativo Geral','Pessoal','Missão Londres','Missão Portugal','Encontro Evo Global','Imersão A Trilha','Formação BH','Retirada GMD','Workshop Goal'];
+    const transProj = transHeaders.indexOf('Projeto');
+    const despProj  = despHeaders.indexOf('Projeto');
+    const semTransProj = transRows.slice(1).filter(r => !r[transProj] && r[descIdx]);
+    const semDespProj  = despRows.slice(1).filter(r => !r[despProj] && r[despDescIdx]);
+    // Nomes inconsistentes — têm projeto mas não está na lista válida
+    const projInconsistentes = transRows.slice(1).filter(r => {
+      const p = String(r[transProj]||'').trim();
+      return p && !PROJETOS_VALIDOS.includes(p) && r[descIdx];
+    });
+    const semProjCount = semTransProj.length + semDespProj.length + projInconsistentes.length;
+    window._projData = { transRows, despRows, transHeaders, despHeaders, transProj, despProj, idIdx, descIdx, despDescIdx, despIdIdx, semTransProj, semDespProj, projInconsistentes };
     
     // Store for later use in showIssue
     window._despRows = despRows;
     window._despIdx = { id: despIdIdx, desc: despDescIdx, cat: despCatIdx, sub: despSubIdx, ent: despEntIdx, proj: despProjIdx };
+
+    window._analisarProjetos = async function(tipo) {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+      const pd = window._projData;
+      if (!pd) return;
+
+      const PROJETOS_VALIDOS = ['Q21 Elite','Business Impact','GMD Impacto','Mastery','Administrativo Geral','Pessoal','Missão Londres','Missão Portugal','Encontro Evo Global','Imersão A Trilha','Formação BH','Retirada GMD','Workshop Goal'];
+      
+      let lote = [];
+      let sheetType = 'transacoes';
+
+      if (tipo === 'trans_proj') {
+        lote = pd.semTransProj.slice(0, 120);
+        sheetType = 'transacoes';
+      } else if (tipo === 'desp_proj') {
+        lote = pd.semDespProj.slice(0, 120);
+        sheetType = 'despesas';
+      } else if (tipo === 'proj_errado') {
+        lote = pd.projInconsistentes.slice(0, 120);
+        sheetType = 'transacoes';
+      }
+
+      if (!lote.length) {
+        toast('Nenhum item para classificar!', 'green');
+        return;
+      }
+
+      document.getElementById('reviewContent').innerHTML = `<div class="empty-state"><div class="icon spinner-icon">↻</div><p>Classificando projetos de ${lote.length} itens...</p></div>`;
+      document.getElementById('btnAprovarTodos').style.display = 'none';
+      document.getElementById('btnAplicar').style.display = 'none';
+
+      const BATCH = 40;
+      const allS = [];
+      const idCol = sheetType === 'despesas' ? pd.despIdIdx : pd.idIdx;
+      const descCol = sheetType === 'despesas' ? pd.despDescIdx : pd.descIdx;
+      const entCol = sheetType === 'despesas' ? pd.despHeaders.indexOf('Entidade') : pd.transHeaders.indexOf('Entidade');
+      const catCol = sheetType === 'despesas' ? pd.despHeaders.indexOf('Categoria') : pd.transHeaders.indexOf('Categoria');
+
+      for (let i = 0; i < lote.length; i += BATCH) {
+        const batch = lote.slice(i, i + BATCH);
+        document.getElementById('reviewContent').innerHTML = `<div class="empty-state"><div class="icon spinner-icon">↻</div><p>Lote ${Math.floor(i/BATCH)+1}/${Math.ceil(lote.length/BATCH)} — classificando projetos...</p></div>`;
+
+        const prompt = `Você é o copiloto financeiro do Glendon Miranda. Defina o projeto correto para cada transação.
+
+REGRA DE OURO: "Esse gasto existe por causa de qual frente?"
+
+PROJETOS DISPONÍVEIS (use EXATAMENTE esses nomes):
+Fixos: Q21 Elite, Business Impact, GMD Impacto, Mastery, Administrativo Geral, Pessoal
+Temporários: Missão Londres, Missão Portugal, Encontro Evo Global, Imersão A Trilha, Formação BH, Retirada GMD, Workshop Goal
+
+REGRAS:
+- Restaurante/mercado/farmácia em Itabirinha → Pessoal
+- Hospedagem/passagem/alimentação em Lisboa/Portugal → Missão Portugal
+- Hospedagem/passagem em Londres → Missão Londres
+- Ferramenta/sistema/marketing Q21 → Q21 Elite
+- Dhaiany/coaching → Mastery
+- Evento Evo/formação/imersão → Mastery ou evento específico
+- Combustível dia a dia → Pessoal
+- Combustível para reunião/evento → Q21 Elite
+- Entidade PJ_BR2 ou GMD → GMD Impacto
+- Assinatura pessoal (Netflix, Spotify) → Pessoal
+- Banco/cartão/anuidade → Administrativo Geral ou Pessoal
+- AIRBNB + Lisboa/Portugal → Missão Portugal
+- TAP/passagem aérea → Missão Portugal ou Missão Londres (pelo destino)
+- Nomes antigos inconsistentes: Q21_Elite→Q21 Elite, GMD_Impacto→GMD Impacto, Portugal→Missão Portugal, Mastery→Mastery (manter)
+
+IMPORTANTE: use o campo "id" EXATAMENTE como está.
+
+Transações:
+${JSON.stringify(batch.map(r => ({ 
+  id: r[idCol], 
+  desc: r[descCol], 
+  cat: r[catCol]||'', 
+  ent: r[entCol]||'',
+  proj_atual: r[sheetType === 'despesas' ? pd.despProj : pd.transProj]||''
+})))}
+
+JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"restaurante local","confianca":"alta"}]}`;
+
+        try {
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+          });
+          const d = await resp.json();
+          const raw = d.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
+          const clean = raw.replace(/\`\`\`json|\`\`\`/g, '').trim();
+          const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
+          allS.push(...(parsed.sugestoes || []).map(s => ({ ...s, _sheet: sheetType })));
+        } catch(e) { console.warn('batch err', e); }
+        
+        if (i + BATCH < lote.length) await new Promise(r => setTimeout(r, 500));
+      }
+
+      reviewSuggestions = allS;
+      document.getElementById('btnAprovarTodos').style.display = 'inline-flex';
+      document.getElementById('btnAplicar').style.display = 'inline-flex';
+
+      // Render project suggestions
+      const titles2 = { trans_proj: 'Transações sem projeto', desp_proj: 'Despesas sem projeto', proj_errado: 'Projetos inconsistentes' };
+      document.getElementById('reviewTitle').textContent = titles2[tipo] || 'Projetos';
+      document.getElementById('reviewSub').textContent = `${allS.length} sugestões — revise e aprove`;
+
+      document.getElementById('reviewContent').innerHTML = allS.length ? allS.map((s, i) => `
+        <div class="suggestion-card ${s.aprovado !== false ? 'approved' : 'rejected'}" id="sc-${i}">
+          <div class="s-check ${s.aprovado !== false ? 'checked' : ''}" onclick="toggleSugestao(${i})">${s.aprovado !== false ? '✓' : ''}</div>
+          <div class="s-info">
+            <div class="s-desc">${s.desc || s.id}</div>
+            <div class="s-meta">
+              <span class="s-tag">${s.id}</span>
+              ${s.proj_atual ? `<span class="s-tag was">${s.proj_atual}</span>` : ''}
+              <span class="s-tag" style="background:rgba(124,106,247,0.1);color:#a89af7;border-color:rgba(124,106,247,0.2)">${s.projeto}</span>
+              <span class="s-tag" style="${s.confianca==='alta'?'color:var(--accent)':s.confianca==='baixa'?'color:var(--red)':''}">conf: ${s.confianca}</span>
+              ${s.motivo ? `<span class="s-tag">${s.motivo}</span>` : ''}
+            </div>
+          </div>
+          <div class="s-actions">
+            <button class="s-btn approve" onclick="toggleSugestao(${i})">✓</button>
+            <button class="s-btn reject" onclick="rejeitarSugestao(${i})">✕</button>
+          </div>
+        </div>`).join('')
+        : '<div class="empty-state"><div class="icon">✓</div><p>Nenhum item para classificar!</p></div>';
+
+      // Mark all as approved by default
+      reviewSuggestions.forEach(s => { if (s.aprovado === undefined) s.aprovado = true; });
+    };
 
     // Process in batches of 40
     const BATCH = 40;
@@ -1135,6 +1277,12 @@ Retorne JSON puro sem markdown:
         <div class="issue-item ${currentIssueType === 'desp_cat' ? 'active' : ''}" onclick="showIssue('desp_cat')"><div class="issue-dot" style="background:var(--amber)"></div>Sem categoria</div>
       </div>
       <div class="issue-group">
+        <div class="issue-group-label">Projetos <span class="issue-count ${semProjCount > 0 ? 'amber' : 'green'}">${semProjCount}</span></div>
+        <div class="issue-item ${currentIssueType === 'trans_proj' ? 'active' : ''}" onclick="showIssue('trans_proj')"><div class="issue-dot" style="background:var(--purple)"></div>Transações sem projeto</div>
+        <div class="issue-item ${currentIssueType === 'desp_proj' ? 'active' : ''}" onclick="showIssue('desp_proj')"><div class="issue-dot" style="background:var(--purple)"></div>Despesas sem projeto</div>
+        <div class="issue-item ${currentIssueType === 'proj_errado' ? 'active' : ''}" onclick="showIssue('proj_errado')"><div class="issue-dot" style="background:var(--red)"></div>Nomes inconsistentes</div>
+      </div>
+      <div class="issue-group">
         <div class="issue-group-label">Resumo</div>
         <div style="font-size:11px;color:var(--muted);font-family:var(--mono);line-height:2">
           transacoes: ${transRows.length - 1}<br>
@@ -1203,12 +1351,24 @@ function showIssue(type, sugestoes) {
   const list = sugestoes || reviewSuggestions;
 
   document.querySelectorAll('.issue-item').forEach(el => el.classList.remove('active'));
-  const titles = { sem_cat: 'Transações sem categoria', sem_ent: 'Transações sem entidade', desp_cat: 'Despesas sem categoria' };
+  const titles = { 
+    sem_cat: 'Transações sem categoria', 
+    sem_ent: 'Transações sem entidade', 
+    desp_cat: 'Despesas sem categoria',
+    trans_proj: 'Transações sem projeto',
+    desp_proj: 'Despesas sem projeto',
+    proj_errado: 'Projetos com nomes inconsistentes'
+  };
   document.getElementById('reviewTitle').textContent = titles[type] || 'Revisão';
   document.getElementById('reviewSub').textContent = `${list.length} sugestões do Claude — revise e aprove`;
 
   if (type === 'desp_cat' && !sugestoes) {
     if (window._analisarDespesas) window._analisarDespesas();
+    return;
+  }
+
+  if ((type === 'trans_proj' || type === 'desp_proj' || type === 'proj_errado') && !sugestoes) {
+    if (window._analisarProjetos) window._analisarProjetos(type);
     return;
   }
 
@@ -1328,6 +1488,8 @@ async function aplicarSugestoes() {
         if (projIdx2 !== -1)
           data.push({ range: `${sheetName}!${colLetter(projIdx2+1)}${sheetRow}`, values: [[s.projeto]] });
       }
+      // Para sugestões de projeto, também pode não ter categoria — só atualiza o que existe
+      if (!s.categoria && !s.subcategoria && !s.entidade && !s.projeto) return;
     });
 
     console.log(`Found: ${found}, Not found: ${notFound}, Updates: ${data.length}`);
