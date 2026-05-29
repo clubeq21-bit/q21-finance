@@ -1545,39 +1545,50 @@ async function loadDashboard() {
     const dH = despRows[0]  || [];
     const rH = recRows[0]   || [];
 
-    const tIdx = { data: tH.indexOf('Data'), valor: tH.indexOf('Valor'), tipo: tH.indexOf('Tipo'), cat: tH.indexOf('Categoria'), sub: tH.indexOf('Subcategoria'), ent: tH.indexOf('Entidade'), proj: tH.indexOf('Projeto'), status: tH.indexOf('Status') };
+    const tIdx = { data: tH.indexOf('Data'), valor: tH.indexOf('Valor'), tipo: tH.indexOf('Tipo'), cat: tH.indexOf('Categoria'), sub: tH.indexOf('Subcategoria'), ent: tH.indexOf('Entidade'), proj: tH.indexOf('Projeto'), status: tH.indexOf('Status'), moeda: tH.indexOf('Moeda') };
     const dIdx = { desc: dH.indexOf('Descricao'), cat: dH.indexOf('Categoria'), ent: dH.indexOf('Entidade'), proj: dH.indexOf('Projeto'), valor: dH.indexOf('Valor_Parcela'), venc: dH.indexOf('Vencimento'), status: dH.indexOf('Status'), conta: dH.indexOf('ID_Conta') };
     const rIdx = { 
       cliente: rH.indexOf('Cliente'), 
-      valor:   rH.indexOf('Valor_Parcela') !== -1 ? rH.indexOf('Valor_Parcela') : rH.indexOf('valorParcelas'),
+      valor:   rH.indexOf('Valor_Parcela'),
+      moeda:   rH.indexOf('Moeda'),
       venc:    rH.indexOf('Vencimento'), 
-      status:  rH.indexOf('Status_Parcela') !== -1 ? rH.indexOf('Status_Parcela') : rH.indexOf('Status'),
-      ent:     rH.indexOf('Entidade') 
+      status:  rH.indexOf('Status_Parcela'),
+      ent:     rH.indexOf('Entidade'),
+      prod:    rH.indexOf('Produto')
     };
+    console.log('rH headers:', rH);
+    console.log('rIdx:', rIdx);
 
     // Get selected month filter
     const mesSel = document.getElementById('dashMes').value;
 
     // Populate month selector
+    // Coleta todos os meses únicos de todas as fontes de data
     const meses = new Set();
-    transRows.slice(1).forEach(r => {
-      const d = r[tIdx.data];
-      if (!d) return;
+    function extractMesFromDate(d) {
+      if (!d) return '';
       const s = String(d).trim();
-      let yyyy = '', mm = '';
       if (s.includes('/')) {
         const p = s.split('/');
         if (p.length === 3) {
-          // DD/MM/YYYY or DD/MM/YY
-          yyyy = p[2].length === 2 ? '20' + p[2] : p[2];
-          mm = p[1].padStart(2,'0');
+          const yyyy = p[2].length === 2 ? '20' + p[2] : p[2];
+          const mm = p[1].padStart(2,'0');
+          if (yyyy.length === 4 && !isNaN(parseInt(yyyy))) return yyyy + '/' + mm;
         }
+        // DD/MM sem ano — ignora
+        if (p.length === 2) return '';
       } else if (s.includes('-')) {
-        // YYYY-MM-DD
-        yyyy = s.slice(0,4);
-        mm = s.slice(5,7);
+        const yyyy = s.slice(0,4);
+        const mm = s.slice(5,7);
+        if (yyyy.length === 4 && !isNaN(parseInt(yyyy))) return yyyy + '/' + mm;
       }
-      if (yyyy && mm && yyyy.length === 4) meses.add(yyyy + '/' + mm);
+      return '';
+    }
+    // Lê de transacoes E de recebiveis para pegar todos os meses
+    [...transRows.slice(1), ...recRows.slice(1)].forEach(r => {
+      const d = r[tIdx.data !== undefined ? tIdx.data : 1];
+      const m = extractMesFromDate(d);
+      if (m) meses.add(m);
     });
     const sel = document.getElementById('dashMes');
     const cur = sel.value;
@@ -1586,17 +1597,7 @@ async function loadDashboard() {
 
     // Filter function
     function extractMes(dateStr) {
-      const s = String(dateStr || '').trim();
-      if (s.includes('/')) {
-        const p = s.split('/');
-        if (p.length === 3) {
-          const yyyy = p[2].length === 2 ? '20' + p[2] : p[2];
-          return yyyy + '/' + p[1].padStart(2,'0');
-        }
-      } else if (s.includes('-')) {
-        return s.slice(0,4) + '/' + s.slice(5,7);
-      }
-      return '';
+      return extractMesFromDate(dateStr);
     }
 
     function matchMes(dateStr) {
@@ -1653,7 +1654,16 @@ async function loadDashboard() {
     const totalFuturo = parcFuturas.reduce((s,r) => s + Math.abs(parseFloat(r[dIdx.valor]||0)), 0);
 
     // Update KPIs
-    document.getElementById('kpiReceita').textContent = fmt(totalReceita);
+    // Receita por moeda
+    const recBRL = receitas.filter(r => String(r[tIdx.moeda]||'BRL').toUpperCase() === 'BRL').reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
+    const recEUR = receitas.filter(r => String(r[tIdx.moeda]||'').toUpperCase() === 'EUR').reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
+    const recUSD = receitas.filter(r => String(r[tIdx.moeda]||'').toUpperCase() === 'USD').reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
+    
+    let recLabel = fmt(recBRL);
+    if (recEUR > 0) recLabel += ` + €${recEUR.toLocaleString('pt-BR',{minimumFractionDigits:0})}`;
+    if (recUSD > 0) recLabel += ` + $${recUSD.toLocaleString('pt-BR',{minimumFractionDigits:0})}`;
+    document.getElementById('kpiReceita').textContent = recLabel;
+    document.getElementById('kpiReceita').style.fontSize = (recEUR > 0 || recUSD > 0) ? '14px' : '';
     document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
     const saldoEl = document.getElementById('kpiSaldo');
     saldoEl.textContent = fmt(saldo);
@@ -1711,22 +1721,41 @@ async function loadDashboard() {
     const projSorted = Object.entries(projMap).sort((a,b)=>b[1]-a[1]);
     document.getElementById('dashProjetos').innerHTML = renderBarChart(Object.fromEntries(projSorted), 'purple', fmt);
 
-    // ── RECEBÍVEIS EM ABERTO
+    // ── RECEBÍVEIS EM ABERTO (próximos 30 dias) por moeda
     const recAberto = recRows.slice(1).filter(r => {
       const status = String(r[rIdx.status]||'').trim();
       const venc = parseDate(r[rIdx.venc]);
       return (status === 'Prevista' || status === 'Vencida') && venc && venc <= em30;
     });
+
+    // Agrupar por moeda
+    const recByMoeda = { BRL: 0, EUR: 0, USD: 0 };
     const recByCliente = {};
     recAberto.forEach(r => {
-      const cli = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
-      const val = Math.abs(parseFloat(r[rIdx.valor]||0));
-      recByCliente[cli] = (recByCliente[cli]||0) + val;
+      const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
+      const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
+      const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
+      if (!isNaN(val) && val > 0) {
+        recByMoeda[moeda] = (recByMoeda[moeda]||0) + val;
+        const key = cli + (moeda !== 'BRL' ? ` (${moeda})` : '');
+        recByCliente[key] = (recByCliente[key]||0) + val;
+      }
     });
+
+    // Total por moeda
+    const moedaSummary = Object.entries(recByMoeda)
+      .filter(([,v]) => v > 0)
+      .map(([m,v]) => {
+        const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
+                    : m === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                    : fmt(v);
+        return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid var(--border2);font-family:var(--mono);font-size:11px;margin-right:6px"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
+      }).join('');
+
     const recSorted = Object.entries(recByCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
     document.getElementById('dashRecebiveis').innerHTML = recSorted.length
-      ? recSorted.map(([k,v]) => renderRow(k, fmt(v), 'green')).join('')
-      : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível em aberto nos próximos 30 dias</div>';
+      ? `${moedaSummary ? `<div style="margin-bottom:12px">${moedaSummary}</div>` : ''}` + recSorted.map(([k,v]) => renderRow(k, recByCliente[k] ? (k.includes('EUR') ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : k.includes('USD') ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : fmt(v)) : fmt(v), 'green')).join('')
+      : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível em aberto nos próximos 30 dias ✓</div>';
 
     const mesLabel = mesSel === 'all' ? 'todos os meses' : mesSel;
     document.getElementById('dashSub').textContent = `Dados de ${mesLabel} — ${transRows.length-1} transações · atualizado agora`;
