@@ -788,7 +788,10 @@ function salvarApiKey() {
   toast('API Key salva!', 'green');
 }
 function getApiKey() {
-  return document.getElementById('apiKey').value.trim() || localStorage.getItem('q21_api_key') || '';
+  // Prioriza localStorage — não depende do campo estar visível/preenchido
+  const stored = localStorage.getItem('q21_api_key') || '';
+  const field = document.getElementById('apiKey')?.value?.trim() || '';
+  return stored || field;
 }
 
 // ── GOOGLE OAUTH ──────────────────────────────────────────
