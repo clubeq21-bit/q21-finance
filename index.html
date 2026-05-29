@@ -1646,6 +1646,20 @@ async function loadDashboard() {
       return isNaN(d) ? null : d;
     }
 
+    // Parser que remove prefixos de moeda: R$, €, $, espaços e converte vírgula para ponto
+    function parseCurrencyValue(v) {
+      if (!v && v !== 0) return 0;
+      const s = String(v).trim()
+        .replace(/R\$\s*/g, '')
+        .replace(/€\s*/g, '')
+        .replace(/\$\s*/g, '')
+        .replace(/\.\s*/g, '')   // remove pontos de milhar
+        .replace(/,/g, '.')      // vírgula → ponto decimal
+        .trim();
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    }
+
     function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
     function fmtEur(n) { return '€ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
     function fmtUsd(n) { return '$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
@@ -1664,8 +1678,8 @@ async function loadDashboard() {
       return matchMes(r[tIdx.data]) && (tipo === 'CARTAO' || tipo === 'DESPESA') && valor < 0;
     });
 
-    const totalReceita  = receitas.reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
-    const totalDespesas = despPagas.reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
+    const totalReceita  = receitas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+    const totalDespesas = despPagas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
     const saldo = totalReceita - totalDespesas;
 
     // ── PARCELAS FUTURAS (despesas Previstas vencendo em 30 dias)
@@ -1674,7 +1688,7 @@ async function loadDashboard() {
       const venc = parseDate(r[dIdx.venc]);
       return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
     });
-    const totalFuturo = parcFuturas.reduce((s,r) => s + Math.abs(parseFloat(r[dIdx.valor]||0)), 0);
+    const totalFuturo = parcFuturas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[dIdx.valor])), 0);
 
     // Update KPIs
     // Receita por moeda
@@ -1759,7 +1773,7 @@ async function loadDashboard() {
 
       todasPrevistas.forEach(r => {
         const mes   = extractMesFromDate(r[rIdx.venc]);
-        const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
+        const val   = Math.abs(parseCurrencyValue(r[rIdx.valor]));
         const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
         if (!isNaN(val) && val > 0 && mes) {
           if (!recByMes[mes]) recByMes[mes] = { BRL:0, EUR:0, USD:0 };
@@ -1801,7 +1815,7 @@ async function loadDashboard() {
 
       recDoMes.forEach(r => {
         const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
-        const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
+        const val   = Math.abs(parseCurrencyValue(r[rIdx.valor]));
         const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
         if (!isNaN(val) && val > 0) {
           recByMoeda[moeda] = (recByMoeda[moeda]||0) + val;
@@ -1836,7 +1850,7 @@ async function loadDashboard() {
     const inadByCliente = {};
     vencidas.forEach(r => {
       const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
-      const val   = Math.abs(parseFloat(r[rIdx.valor]||0));
+      const val   = Math.abs(parseCurrencyValue(r[rIdx.valor]));
       const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
       const venc  = String(r[rIdx.venc]||'').trim();
       if (!isNaN(val) && val > 0) {
