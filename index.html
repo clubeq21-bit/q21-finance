@@ -910,9 +910,12 @@ async function loadBriefing() {
   const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
   let sheetsData = '';
 
-  if (googleAccessToken && shCfg.id) {
+  // Tenta conectar mesmo sem token em memória — garantirToken renova automaticamente
+  const googleInfo = localStorage.getItem('q21_google_info');
+  if (googleInfo && shCfg.id && tokenClient) {
     try {
       const token = await garantirToken();
+      googleAccessToken = token;
       const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
       const headers = { Authorization: 'Bearer ' + token };
       const [recR, despR, transR] = await Promise.all([
