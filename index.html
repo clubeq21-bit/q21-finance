@@ -979,11 +979,12 @@ async function analisarPlanilha() {
     const despSubIdx  = despHeaders.indexOf('Subcategoria');
     const despIdIdx   = despHeaders.indexOf('ID_Despesa');
     const despEntIdx  = despHeaders.indexOf('Entidade');
+    const despProjIdx = despHeaders.indexOf('Projeto');
     const semDespCat  = despRows.slice(1).filter(r => (!r[despCatIdx] || !r[despSubIdx]) && r[despDescIdx]);
     
     // Store for later use in showIssue
     window._despRows = despRows;
-    window._despIdx = { id: despIdIdx, desc: despDescIdx, cat: despCatIdx, sub: despSubIdx, ent: despEntIdx };
+    window._despIdx = { id: despIdIdx, desc: despDescIdx, cat: despCatIdx, sub: despSubIdx, ent: despEntIdx, proj: despProjIdx };
 
     // Process in batches of 40
     const BATCH = 40;
@@ -996,6 +997,7 @@ async function analisarPlanilha() {
       const batch = lote.slice(i, i + BATCH);
       document.getElementById('reviewContent').innerHTML = `<div class="empty-state"><div class="icon spinner-icon">↻</div><p>Classificando lote ${Math.floor(i/BATCH)+1}/${Math.ceil(lote.length/BATCH)} (${i+1}–${Math.min(i+BATCH, lote.length)} de ${lote.length})...</p></div>`;
 
+      const projIdx2 = transHeaders ? transHeaders.indexOf('Projeto') : -1;
       const prompt = `Você é o copiloto financeiro do Glendon Miranda. Classifique estas transações.
 
 IMPORTANTE: use o campo "id" EXATAMENTE como fornecido — não modifique, não crie novos IDs.
@@ -1008,11 +1010,24 @@ Categorias PF_BR: Alimentação(Em casa|Fora de casa), Saúde(Medicamentos e ace
 
 Categorias PJ_BR: Operacionais e Comerciais(Marketing e Propaganda|Sistema|Contador|Fornecedores|Material de escritório|Impostos), Pessoal(Funcionários Fixos|Pró-labore), Viagens(Hospedagem|Passagens|Combustível|Alimentação), Serviços(Energia elétrica|Telefonia e Internet|Água), Veículos(Abastecimento|Manutenção e conservação|Multas), Bancos e cartões(Juros - Cartão|Manutenção e tarifas)
 
-Transações (use o id EXATAMENTE como está):
-${JSON.stringify(batch.map(r => ({ id: r[idIdx], desc: r[descIdx], entidade: r[entIdx] || '', conta: r[idIdx > 0 ? idIdx+6 : 6] || '' })))}
+PROJETOS — responde "por que esse gasto existe?":
+Fixos: Q21 Elite(mentoria, captação, networking estratégico, eventos de prospecção), Business Impact(corporativo, EUA, consultoria, liderança), GMD Impacto(eventos Método Evo, equipe, produção, campanhas), Método Evo / Mastery(mentor/trainer no ambiente Evo sem ser Q21 direto), Administrativo Geral(custos operacionais sem projeto específico), Pessoal(vida pessoal, família, casa, lazer)
+Temporários: Missão Londres, Missão Portugal, Encontro Evo Global, Imersão A Trilha, Formação BH, Retirada GMD, Workshop Goal
 
-Retorne JSON puro sem markdown. Use os IDs exatamente como fornecidos:
-{"sugestoes":[{"id":"EXATO_ID_DA_LINHA","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","confianca":"alta"}]}`;
+Regra do projeto: "Esse gasto existe por causa de qual frente?"
+- Restaurante em Itabirinha → Pessoal
+- Hospedagem em Lisboa → Missão Portugal (ou Q21 Elite se for prospecção)
+- Passagem para evento Evo → Método Evo / Mastery
+- Ferramenta de marketing Q21 → Q21 Elite
+- Supermercado, farmácia, posto → Pessoal
+- Combustível para reunião → Q21 Elite ou Business Impact
+- Entidade PJ_BR2 → GMD Impacto
+
+Transações (use o id EXATAMENTE como está):
+\${JSON.stringify(batch.map(r => ({ id: r[idIdx], desc: r[descIdx], entidade: r[entIdx] || '', projeto: projIdx2 >= 0 ? r[projIdx2] || '' : '' })))}
+
+Retorne JSON puro sem markdown:
+{"sugestoes":[{"id":"EXATO_ID","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","projeto":"Pessoal","confianca":"alta"}]}`;
 
       try {
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1077,11 +1092,14 @@ Retorne JSON puro sem markdown. Use os IDs exatamente como fornecidos:
         const batch = semDesp.slice(i, i + BATCH);
         const prompt = `Classifique estas despesas de cartão de crédito do Glendon Miranda.
 IMPORTANTE: use o campo "id" EXATAMENTE como fornecido.
-Entidades: PF_BR=pessoal, PJ_BR=Q21 negócio, PF_EU=Europa, LLC_US=EUA
+Entidades: PF_BR=pessoal, PJ_BR=Q21 negócio, PF_EU=Europa, LLC_US=EUA, PJ_BR2=GMD Impacto
 Categorias PF_BR: Alimentação(Em casa|Fora de casa), Saúde(Medicamentos|Plano de saúde|Dentista|Exames), Pessoais(Higiene e Beleza|Vestuário|Presentes), Residenciais(Aluguel|Condomínio|Energia elétrica|Manutenção), Serviços(Telefonia|Internet|Streaming), Viagens(Hospedagem|Passagens|Combustível|Alimentação), Veículos(Combustível para locomoção|Manutenção|Estacionamento|Multas), Lazer(Cinema|Eventos|Festas), Bancos e cartões(Anuidade|Juros - Cartão)
 Categorias PJ_BR: Operacionais e Comerciais(Marketing|Sistema|Contador|Fornecedores), Pessoal(Pró-labore|Funcionários), Viagens(Hospedagem|Passagens|Alimentação), Serviços(Energia elétrica|Telefonia)
-Despesas: ${JSON.stringify(batch.map(r => ({ id: r[idx.id], desc: r[idx.desc], entidade: r[idx.ent]||'' })))}
-JSON puro: {"sugestoes":[{"id":"...","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","confianca":"alta"}]}`;
+PROJETOS: Q21 Elite(mentoria/captação/networking), Business Impact(corporativo/EUA), GMD Impacto(eventos Evo/produção), Método Evo / Mastery(mentor Evo), Administrativo Geral(custos gerais), Pessoal(vida pessoal/família/casa)
+Temporários: Missão Londres, Missão Portugal, Encontro Evo Global, Imersão A Trilha, Formação BH, Retirada GMD
+Regra: restaurante Itabirinha→Pessoal, hospedagem Lisboa→Missão Portugal, ferramenta Q21→Q21 Elite, supermercado/farmácia→Pessoal
+Despesas: \${JSON.stringify(batch.map(r => ({ id: r[idx.id], desc: r[idx.desc], entidade: r[idx.ent]||'', projeto: r[idx.proj]||'' })))}
+JSON puro: {"sugestoes":[{"id":"...","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","projeto":"Pessoal","confianca":"alta"}]}`;
         try {
           const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:prompt}]}) });
           const d = await resp.json();
@@ -1142,6 +1160,7 @@ function showIssue(type, sugestoes) {
           <span class="s-tag new">${s.categoria}</span>
           <span class="s-tag new">${s.subcategoria}</span>
           <span class="s-tag new">${s.entidade}</span>
+          ${s.projeto ? `<span class="s-tag" style="background:rgba(124,106,247,0.1);color:#a89af7;border-color:rgba(124,106,247,0.2)">${s.projeto}</span>` : ''}
           <span class="s-tag" style="${s.confianca === 'alta' ? 'color:var(--accent)' : s.confianca === 'baixa' ? 'color:var(--red)' : ''}">conf: ${s.confianca}</span>
         </div>
       </div>
@@ -1232,6 +1251,11 @@ async function aplicarSugestoes() {
         data.push({ range: `${sheetName}!${colLetter(subIdx+1)}${sheetRow}`, values: [[s.subcategoria]] });
       if (s.entidade)
         data.push({ range: `${sheetName}!${colLetter(entIdx+1)}${sheetRow}`, values: [[s.entidade]] });
+      if (s.projeto) {
+        const projIdx2 = hdrs.indexOf('Projeto');
+        if (projIdx2 !== -1)
+          data.push({ range: `${sheetName}!${colLetter(projIdx2+1)}${sheetRow}`, values: [[s.projeto]] });
+      }
     });
 
     console.log(`Found: ${found}, Not found: ${notFound}, Updates: ${data.length}`);
