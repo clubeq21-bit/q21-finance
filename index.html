@@ -1763,6 +1763,27 @@ function escHtml(s) { return String(s||'').replace(/"/g,'&quot;').replace(/</g,'
 // ── DASHBOARD ──────────────────────────────────────────
 let dashData = null;
 
+// ── CURRENCY PARSER ──────────────────────────────────────────
+function parseCurrencyValue(v) {
+  if (!v && v !== 0) return 0;
+  let s = String(v).trim();
+  s = s.replace(/R\$\s*/g, '').replace(/€\s*/g, '').replace(/US\$\s*/g, '').replace(/\$\s*/g, '').trim();
+  const temVirgula = s.includes(',');
+  const temPonto = s.includes('.');
+  if (temVirgula && temPonto) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (temVirgula) {
+    s = s.replace(',', '.');
+  }
+  s = s.replace(/[^\d.\-]/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
 async function loadDashboard() {
   const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
   if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
