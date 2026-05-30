@@ -1766,7 +1766,6 @@ let dashData = null;
 async function loadDashboard() {
   const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
   if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
-
   document.getElementById('dashSub').textContent = '⏳ Carregando dados...';
 
   try {
@@ -1785,391 +1784,308 @@ async function loadDashboard() {
     const despRows  = despJson.values  || [];
     const recRows   = recJson.values   || [];
 
-    // Parse headers
     const tH = transRows[0] || [];
     const dH = despRows[0]  || [];
     const rH = recRows[0]   || [];
 
-    const tIdx = { data: tH.indexOf('Data'), valor: tH.indexOf('Valor'), tipo: tH.indexOf('Tipo'), cat: tH.indexOf('Categoria'), sub: tH.indexOf('Subcategoria'), ent: tH.indexOf('Entidade'), proj: tH.indexOf('Projeto'), status: tH.indexOf('Status'), moeda: tH.indexOf('Moeda') };
-    const dIdx = { desc: dH.indexOf('Descricao'), cat: dH.indexOf('Categoria'), ent: dH.indexOf('Entidade'), proj: dH.indexOf('Projeto'), valor: dH.indexOf('Valor_Parcela'), venc: dH.indexOf('Vencimento'), status: dH.indexOf('Status'), conta: dH.indexOf('ID_Conta') };
-    const rIdx = { 
-      cliente: rH.indexOf('Cliente'), 
+    const tIdx = {
+      data:   tH.indexOf('Data'),
+      valor:  tH.indexOf('Valor'),
+      tipo:   tH.indexOf('Tipo'),
+      cat:    tH.indexOf('Categoria'),
+      sub:    tH.indexOf('Subcategoria'),
+      ent:    tH.indexOf('Entidade'),
+      proj:   tH.indexOf('Projeto'),
+      status: tH.indexOf('Status'),
+      moeda:  tH.indexOf('Moeda')
+    };
+    const dIdx = {
+      desc:   dH.indexOf('Descricao'),
+      cat:    dH.indexOf('Categoria'),
+      ent:    dH.indexOf('Entidade'),
+      proj:   dH.indexOf('Projeto'),
+      valor:  dH.indexOf('Valor_Parcela'),
+      venc:   dH.indexOf('Vencimento'),
+      status: dH.indexOf('Status'),
+      conta:  dH.indexOf('ID_Conta')
+    };
+    const rIdx = {
+      cliente: rH.indexOf('Cliente'),
       valor:   rH.indexOf('Valor_Parcela'),
       moeda:   rH.indexOf('Moeda'),
-      venc:    rH.indexOf('Vencimento') !== -1 ? rH.indexOf('Vencimento') : 9, 
+      venc:    rH.indexOf('Vencimento') !== -1 ? rH.indexOf('Vencimento') : 9,
       status:  rH.indexOf('Status_Parcela'),
       ent:     rH.indexOf('Entidade'),
       prod:    rH.indexOf('Produto')
     };
-    console.log('rH headers:', rH);
-    console.log('rIdx:', rIdx);
 
-    // Get selected month filter
-    // Extrai mês de qualquer formato de data
-    function extractMesFromDate(d) {
-      if (!d) return '';
-      const s = String(d).trim();
-      if (s.includes('/')) {
-        const p = s.split('/');
-        if (p.length === 3) {
-          const yyyy = p[2].length === 2 ? '20' + p[2] : p[2];
-          const mm = p[1].padStart(2,'0');
-          if (yyyy.length === 4 && !isNaN(parseInt(yyyy))) return yyyy + '/' + mm;
-        }
-      } else if (s.includes('-')) {
-        const yyyy = s.slice(0,4);
-        const mm = s.slice(5,7);
-        if (yyyy.length === 4 && !isNaN(parseInt(yyyy))) return yyyy + '/' + mm;
-      }
-      return '';
-    }
-
-    // Coleta meses de TODAS as abas
-    const meses = new Set();
-
-    // transacoes — coluna Data
-    transRows.slice(1).forEach(r => {
-      const m = extractMesFromDate(r[tIdx.data]);
-      if (m) meses.add(m);
-    });
-
-    // recebiveis — coluna Vencimento (J = índice 9)
-    const rVencIdx = rH.indexOf('Vencimento') !== -1 ? rH.indexOf('Vencimento') : 9;
-    recRows.slice(1).forEach(r => {
-      const m = extractMesFromDate(r[rVencIdx]);
-      if (m) meses.add(m);
-    });
-
-    // despesas — coluna Vencimento
-    const dVencIdx = dH.indexOf('Vencimento') !== -1 ? dH.indexOf('Vencimento') : 11;
-    despRows.slice(1).forEach(r => {
-      const m = extractMesFromDate(r[dVencIdx]);
-      if (m) meses.add(m);
-    });
-    const sel = document.getElementById('dashMes');
-    const cur = sel.value;
-    // Default to current month on first load
-    const defaultMes = cur || '2026/05';
-    sel.innerHTML = '<option value="all">Todos os meses</option>' +
-      Array.from(meses).sort().reverse().map(m => `<option value="${m}" ${(cur?cur:defaultMes)===m?'selected':''}>${m}</option>`).join('');
-    if (!cur) document.getElementById('dashMes').value = defaultMes;
-
-    // Read selected month AFTER selector is populated
-    const mesSel = document.getElementById('dashMes').value || defaultMes;
-
-    // Filter function
-    function extractMes(dateStr) {
-      return extractMesFromDate(dateStr);
-    }
-
-    function matchMes(dateStr) {
-      if (mesSel === 'all') return true;
-      return extractMes(dateStr) === mesSel;
-    }
-
-    const hoje = new Date();
-    const em30 = new Date(hoje); em30.setDate(hoje.getDate() + 30);
-
-    function parseDate(s) {
+    // ── HELPER FUNCTIONS ──
+    function parseBRDate(s) {
       if (!s) return null;
       if (s instanceof Date) return s;
       const str = String(s).trim();
       if (str.includes('/')) {
         const p = str.split('/');
         if (p.length === 3) {
-          const y = p[2].length === 2 ? '20'+p[2] : p[2];
-          return new Date(parseInt(y), parseInt(p[1])-1, parseInt(p[0]));
+          const y = p[2].length === 2 ? '20' + p[2] : p[2];
+          return new Date(parseInt(y), parseInt(p[1]) - 1, parseInt(p[0]));
         }
+      } else if (str.includes('-')) {
+        return new Date(str);
       }
-      const d = new Date(str);
-      return isNaN(d) ? null : d;
+      return null;
     }
 
-    // Parser que remove prefixos de moeda e converte formato BR para float
-    function parseCurrencyValue(v) {
-      if (!v && v !== 0) return 0;
-      let s = String(v).trim();
-      // Remove prefixos de moeda
-      s = s.replace(/R\$\s*/g, '').replace(/€\s*/g, '').replace(/US\$\s*/g, '').replace(/\$\s*/g, '').trim();
-      // Detecta formato: se tem vírgula depois de ponto (1.234,56) → formato BR
-      // Se tem ponto depois de vírgula (1,234.56) → formato EN
-      const temVirgula = s.includes(',');
-      const temPonto = s.includes('.');
-      if (temVirgula && temPonto) {
-        // Último separador define o decimal
-        const ultimaVirgula = s.lastIndexOf(',');
-        const ultimoPonto = s.lastIndexOf('.');
-        if (ultimaVirgula > ultimoPonto) {
-          // BR: 1.234,56 → remove pontos, troca vírgula
-          s = s.replace(/\./g, '').replace(',', '.');
-        } else {
-          // EN: 1,234.56 → remove vírgulas
-          s = s.replace(/,/g, '');
+    function getMesAno(s) {
+      if (!s) return '';
+      const str = String(s).trim();
+      if (str.includes('/')) {
+        const p = str.split('/');
+        if (p.length === 3) {
+          const y = p[2].length === 2 ? '20' + p[2] : p[2];
+          return y + '/' + p[1].padStart(2, '0');
         }
-      } else if (temVirgula) {
-        // Só vírgula: 1234,56 → troca por ponto
-        s = s.replace(',', '.');
+      } else if (str.includes('-') && str.length >= 7) {
+        return str.slice(0, 4) + '/' + str.slice(5, 7);
       }
-      // Remove qualquer caractere não numérico exceto ponto e sinal
-      s = s.replace(/[^\d.\-]/g, '');
-      const n = parseFloat(s);
-      return isNaN(n) ? 0 : n;
+      return '';
     }
 
-    function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
-    function fmtEur(n) { return '€ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
-    function fmtUsd(n) { return '$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
+    function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-    // ── RECEITAS REAIS = recebíveis com Status_Parcela = "Paga" no mês selecionado
+    // ── POPULATE MONTH SELECTOR ──
+    const meses = new Set();
+    transRows.slice(1).forEach(r => { const m = getMesAno(r[tIdx.data]); if (m) meses.add(m); });
+    recRows.slice(1).forEach(r => { const m = getMesAno(r[rIdx.venc]); if (m) meses.add(m); });
+    despRows.slice(1).forEach(r => { const m = getMesAno(r[dIdx.venc]); if (m) meses.add(m); });
+
+    const sel = document.getElementById('dashMes');
+    const curMes = sel.value;
+    const defaultMes = '2026/05';
+    sel.innerHTML = '<option value="all">Todos os meses</option>' +
+      Array.from(meses).sort().reverse().map(m =>
+        `<option value="${m}" ${(curMes || defaultMes) === m ? 'selected' : ''}>${m}</option>`
+      ).join('');
+    if (!curMes) sel.value = defaultMes;
+
+    const mesSel = sel.value;
+    const hoje = new Date();
+    const em30 = new Date(hoje); em30.setDate(hoje.getDate() + 30);
+
+    function matchMes(dateStr) {
+      if (mesSel === 'all') return true;
+      return getMesAno(dateStr) === mesSel;
+    }
+
+    // ── RECEITAS — recebíveis com Status_Parcela = Paga ──
     const recPagas = recRows.slice(1).filter(r => {
-      const status = String(r[rIdx.status]||'').trim();
+      const status = String(r[rIdx.status] || '').trim();
       return status === 'Paga' && matchMes(r[rIdx.venc]);
     });
 
-    // ── DESPESAS PAGAS — exclui pagamentos de fatura e receitas
-    const TIPOS_EXCLUIDOS = ['PAGAMENTO_CARTAO', 'PAGAMENTO_FATURA', 'RECEITA', 'TRANSFERENCIA'];
+    const recBRL = recPagas
+      .filter(r => !['EUR','USD'].includes(String(r[rIdx.moeda]||'').toUpperCase()))
+      .reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+    const recEUR = recPagas
+      .filter(r => String(r[rIdx.moeda]||'').toUpperCase() === 'EUR')
+      .reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+    const recUSD = recPagas
+      .filter(r => String(r[rIdx.moeda]||'').toUpperCase() === 'USD')
+      .reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+
+    // ── DESPESAS — transações CARTAO com valor negativo ──
+    const TIPOS_EXCL = ['PAGAMENTO_CARTAO','PAGAMENTO_FATURA','RECEITA','TRANSFERENCIA'];
     const despPagas = transRows.slice(1).filter(r => {
       const valor = parseCurrencyValue(r[tIdx.valor]);
       if (valor >= 0) return false;
       if (!matchMes(r[tIdx.data])) return false;
-      // Exclui tipos que não são despesa real
-      const tipo = String(r[tIdx.tipo]||'').toUpperCase().trim();
-      if (TIPOS_EXCLUIDOS.includes(tipo)) return false;
-      // Exclui datas futuras
-      const d = parseDate(r[tIdx.data]);
-      if (d && d > new Date()) return false;
+      const tipo = String(r[tIdx.tipo] || '').toUpperCase().trim();
+      if (TIPOS_EXCL.includes(tipo)) return false;
       return true;
     });
-
-    // Totais por moeda — receitas dos recebíveis pagos
-    const recBRL = recPagas.filter(r => String(r[rIdx.moeda]||'BRL').toUpperCase() !== 'EUR' && String(r[rIdx.moeda]||'BRL').toUpperCase() !== 'USD').reduce((s,r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
-    const recEUR = recPagas.filter(r => String(r[rIdx.moeda]||'').toUpperCase() === 'EUR').reduce((s,r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
-    const recUSD = recPagas.filter(r => String(r[rIdx.moeda]||'').toUpperCase() === 'USD').reduce((s,r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
-
-    const totalDespesas = despPagas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+    const totalDespesas = despPagas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
     const saldo = recBRL - totalDespesas;
 
+    // ── PARCELAS FUTURAS ──
+    const parcFuturas = despRows.slice(1).filter(r => {
+      const status = String(r[dIdx.status] || '').trim();
+      const venc = parseBRDate(r[dIdx.venc]);
+      return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
+    });
+    const totalFuturo = parcFuturas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[dIdx.valor])), 0);
+
+    // ── UPDATE KPIs ──
     let recLabel = fmt(recBRL);
-    if (recEUR > 0) recLabel += ` + €${recEUR.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
-    if (recUSD > 0) recLabel += ` + $${recUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+    if (recEUR > 0) recLabel += ` + €${recEUR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    if (recUSD > 0) recLabel += ` + $${recUSD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
     document.getElementById('kpiReceita').textContent = recLabel;
     document.getElementById('kpiReceita').style.fontSize = (recEUR > 0 || recUSD > 0) ? '13px' : '';
     document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
     const saldoEl = document.getElementById('kpiSaldo');
     saldoEl.textContent = fmt(saldo);
     saldoEl.className = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
-    // ── PARCELAS FUTURAS
-    const parcFuturas = despRows.slice(1).filter(r => {
-      const status = String(r[dIdx.status]||'').trim();
-      const venc = parseDate(r[dIdx.venc]);
-      return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
-    });
-    const totalFuturo = parcFuturas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[dIdx.valor])), 0);
     document.getElementById('kpiFuturo').textContent = fmt(totalFuturo);
 
-    // ── RECEITAS POR ENTIDADE (recebíveis pagos)
+    // ── RECEITAS POR ENTIDADE ──
     const recByEnt = {};
     recPagas.forEach(r => {
       const ent = r[rIdx.ent] || 'Sem entidade';
       const val = Math.abs(parseCurrencyValue(r[rIdx.valor]));
-      if (val > 0) recByEnt[ent] = (recByEnt[ent]||0) + val;
+      if (val > 0) recByEnt[ent] = (recByEnt[ent] || 0) + val;
     });
     document.getElementById('dashRecEntidade').innerHTML = renderBarChart(recByEnt, 'green', fmt);
 
-    // ── DESPESAS POR ENTIDADE
+    // ── DESPESAS POR ENTIDADE ──
     const despByEnt = {};
     despPagas.forEach(r => {
       const ent = r[tIdx.ent] || 'Sem entidade';
-      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
-      despByEnt[ent] = (despByEnt[ent]||0) + val;
+      const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
+      despByEnt[ent] = (despByEnt[ent] || 0) + val;
     });
     document.getElementById('dashDespEntidade').innerHTML = renderBarChart(despByEnt, 'amber', fmt);
 
-    // ── TOP CATEGORIAS
+    // ── TOP CATEGORIAS ──
     const catMap = {};
     despPagas.forEach(r => {
       const cat = r[tIdx.cat] || 'Sem categoria';
-      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
-      catMap[cat] = (catMap[cat]||0) + val;
+      const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
+      catMap[cat] = (catMap[cat] || 0) + val;
     });
-    const topCats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0,8);
-    const catObj = Object.fromEntries(topCats);
-    document.getElementById('dashCategorias').innerHTML = renderBarChart(catObj, 'purple', fmt);
+    const topCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    document.getElementById('dashCategorias').innerHTML = renderBarChart(Object.fromEntries(topCats), 'purple', fmt);
 
-    // ── PARCELAS VENCENDO EM 30 DIAS
+    // ── PARCELAS VENCENDO ──
     const parcGrp = {};
     parcFuturas.forEach(r => {
-      const desc = String(r[dIdx.desc]||'').replace(/\s+\d+\/\d+$/,'').trim();
-      const val = Math.abs(parseFloat(r[dIdx.valor]||0));
-      parcGrp[desc] = (parcGrp[desc]||0) + val;
+      const desc = String(r[dIdx.desc] || '').replace(/\s+\d+\/\d+$/, '').trim();
+      const val = Math.abs(parseCurrencyValue(r[dIdx.valor]));
+      parcGrp[desc] = (parcGrp[desc] || 0) + val;
     });
-    const parcSorted = Object.entries(parcGrp).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const parcSorted = Object.entries(parcGrp).sort((a, b) => b[1] - a[1]).slice(0, 8);
     document.getElementById('dashParcelas').innerHTML = parcSorted.length
-      ? parcSorted.map(([k,v]) => renderRow(k, fmt(v), 'red')).join('')
+      ? parcSorted.map(([k, v]) => renderRow(k, fmt(v), 'red')).join('')
       : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhuma parcela vencendo em 30 dias ✓</div>';
 
-    // ── POR PROJETO
+    // ── POR PROJETO ──
     const projMap = {};
     despPagas.forEach(r => {
       const proj = r[tIdx.proj] || 'Sem projeto';
-      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
-      projMap[proj] = (projMap[proj]||0) + val;
+      const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
+      projMap[proj] = (projMap[proj] || 0) + val;
     });
-    const projSorted = Object.entries(projMap).sort((a,b)=>b[1]-a[1]);
-    document.getElementById('dashProjetos').innerHTML = renderBarChart(Object.fromEntries(projSorted), 'purple', fmt);
+    document.getElementById('dashProjetos').innerHTML = renderBarChart(
+      Object.fromEntries(Object.entries(projMap).sort((a, b) => b[1] - a[1])), 'purple', fmt
+    );
 
-    // ── RECEBÍVEIS EM ABERTO (próximos 30 dias) por moeda
-    // ── PROJEÇÃO DE RECEBÍVEIS
-    // Todas as parcelas Previstas e Vencidas = o que ainda vai entrar no caixa
+    // ── PROJEÇÃO RECEBÍVEIS ──
     const todasPrevistas = recRows.slice(1).filter(r => {
-      const status = String(r[rIdx.status]||'').trim();
+      const status = String(r[rIdx.status] || '').trim();
       return status === 'Prevista' || status === 'Vencida';
     });
 
     if (mesSel === 'all') {
-      // Visão geral: total previsto por mês (projeção futura)
       const recByMes = {};
-      const recByMoedaTotal = { BRL: 0, EUR: 0, USD: 0 };
-
+      const totMoeda = { BRL: 0, EUR: 0, USD: 0 };
       todasPrevistas.forEach(r => {
-        const mes   = extractMesFromDate(r[rIdx.venc]);
-        const val   = Math.abs(parseCurrencyValue(r[rIdx.valor]));
-        const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
-        if (!isNaN(val) && val > 0 && mes) {
-          if (!recByMes[mes]) recByMes[mes] = { BRL:0, EUR:0, USD:0 };
-          recByMes[mes][moeda] = (recByMes[mes][moeda]||0) + val;
-          recByMoedaTotal[moeda] = (recByMoedaTotal[moeda]||0) + val;
-        }
+        const mes = getMesAno(r[rIdx.venc]);
+        const val = Math.abs(parseCurrencyValue(r[rIdx.valor]));
+        const moeda = String(r[rIdx.moeda] || 'BRL').toUpperCase();
+        if (!mes || !val) return;
+        if (!recByMes[mes]) recByMes[mes] = { BRL: 0, EUR: 0, USD: 0 };
+        recByMes[mes][moeda] = (recByMes[mes][moeda] || 0) + val;
+        totMoeda[moeda] = (totMoeda[moeda] || 0) + val;
       });
-
-      const mesSorted = Object.entries(recByMes).sort((a,b) => a[0].localeCompare(b[0]));
-      
-      const totalSummary = Object.entries(recByMoedaTotal)
-        .filter(([,v]) => v > 0)
-        .map(([m,v]) => {
-          const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
-                      : m === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
-                      : fmt(v);
-          return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid rgba(0,212,170,0.2);font-family:var(--mono);font-size:11px;margin-right:6px;background:rgba(0,212,170,0.05)"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
-        }).join('');
-
+      const totalSummary = Object.entries(totMoeda).filter(([, v]) => v > 0).map(([m, v]) => {
+        const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          : m === 'USD' ? `$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : fmt(v);
+        return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid rgba(0,212,170,0.2);font-family:var(--mono);font-size:11px;margin-right:6px;background:rgba(0,212,170,0.05)"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
+      }).join('');
+      const mesSorted = Object.entries(recByMes).sort((a, b) => a[0].localeCompare(b[0]));
       document.getElementById('dashRecebiveis').innerHTML = mesSorted.length ? `
-        <div style="margin-bottom:12px">
-          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">TOTAL PREVISTO</span>
-          <div style="margin-top:6px">${totalSummary}</div>
-        </div>
+        <div style="margin-bottom:12px"><span style="font-size:11px;color:var(--muted);font-family:var(--mono)">TOTAL PREVISTO</span><div style="margin-top:6px">${totalSummary}</div></div>
         ${mesSorted.map(([mes, vals]) => {
           const parts = [];
           if (vals.BRL > 0) parts.push(fmt(vals.BRL));
-          if (vals.EUR > 0) parts.push(`€ ${vals.EUR.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
-          if (vals.USD > 0) parts.push(`$ ${vals.USD.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+          if (vals.EUR > 0) parts.push(`€ ${vals.EUR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+          if (vals.USD > 0) parts.push(`$ ${vals.USD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
           return renderRow(mes, parts.join(' + '), 'green');
-        }).join('')}
-      ` : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível previsto ✓</div>';
-
+        }).join('')}` : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível previsto</div>';
     } else {
-      // Mês específico: quem paga naquele mês
-      const recDoMes = todasPrevistas.filter(r => extractMesFromDate(r[rIdx.venc]) === mesSel);
+      const recDoMes = todasPrevistas.filter(r => getMesAno(r[rIdx.venc]) === mesSel);
       const recByCliente = {};
       const recByMoeda = { BRL: 0, EUR: 0, USD: 0 };
-
       recDoMes.forEach(r => {
-        const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
-        const val   = Math.abs(parseCurrencyValue(r[rIdx.valor]));
-        const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
-        if (!isNaN(val) && val > 0) {
-          recByMoeda[moeda] = (recByMoeda[moeda]||0) + val;
-          const key = cli + (moeda !== 'BRL' ? ` (${moeda})` : '');
-          recByCliente[key] = (recByCliente[key]||0) + val;
-        }
+        const cli = String(r[rIdx.cliente] || '').trim() || 'Desconhecido';
+        const val = Math.abs(parseCurrencyValue(r[rIdx.valor]));
+        const moeda = String(r[rIdx.moeda] || 'BRL').toUpperCase();
+        if (!val) return;
+        recByMoeda[moeda] = (recByMoeda[moeda] || 0) + val;
+        recByCliente[cli + (moeda !== 'BRL' ? ` (${moeda})` : '')] = (recByCliente[cli + (moeda !== 'BRL' ? ` (${moeda})` : '')] || 0) + val;
       });
-
-      const moedaSummary = Object.entries(recByMoeda)
-        .filter(([,v]) => v > 0)
-        .map(([m,v]) => {
-          const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
-                      : m === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
-                      : fmt(v);
-          return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid rgba(0,212,170,0.2);font-family:var(--mono);font-size:11px;margin-right:6px;background:rgba(0,212,170,0.05)"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
-        }).join('');
-
-      const recSorted = Object.entries(recByCliente).sort((a,b)=>b[1]-a[1]);
+      const moedaSummary = Object.entries(recByMoeda).filter(([, v]) => v > 0).map(([m, v]) => {
+        const label = m === 'EUR' ? `€ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          : m === 'USD' ? `$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : fmt(v);
+        return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid rgba(0,212,170,0.2);font-family:var(--mono);font-size:11px;margin-right:6px;background:rgba(0,212,170,0.05)"><span style="color:var(--muted)">${m}</span><span style="color:var(--accent)">${label}</span></span>`;
+      }).join('');
+      const recSorted = Object.entries(recByCliente).sort((a, b) => b[1] - a[1]);
       document.getElementById('dashRecebiveis').innerHTML = recSorted.length
-        ? `${moedaSummary ? `<div style="margin-bottom:12px">${moedaSummary}</div>` : ''}` 
-          + recSorted.map(([k,v]) => renderRow(k, k.includes('EUR') ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : k.includes('USD') ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : fmt(v), 'green')).join('')
+        ? `${moedaSummary ? `<div style="margin-bottom:12px">${moedaSummary}</div>` : ''}` +
+          recSorted.map(([k, v]) => renderRow(k, k.includes('EUR') ? `€ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : k.includes('USD') ? `$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : fmt(v), 'green')).join('')
         : `<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum recebível previsto para ${mesSel}</div>`;
     }
 
-    // ── INADIMPLÊNCIA — parcelas Vencidas não pagas
-    const vencidas = recRows.slice(1).filter(r => {
-      const status = String(r[rIdx.status]||'').trim();
-      return status === 'Vencida';
-    });
-
-    // Agrupar por cliente
+    // ── INADIMPLÊNCIA ──
+    const vencidas = recRows.slice(1).filter(r => String(r[rIdx.status] || '').trim() === 'Vencida');
     const inadByCliente = {};
     vencidas.forEach(r => {
-      const cli   = String(r[rIdx.cliente]||'').trim() || 'Desconhecido';
-      const val   = Math.abs(parseCurrencyValue(r[rIdx.valor]));
-      const moeda = String(r[rIdx.moeda]||'BRL').trim().toUpperCase();
-      const venc  = String(r[rIdx.venc]||'').trim();
-      if (!isNaN(val) && val > 0) {
-        if (!inadByCliente[cli]) inadByCliente[cli] = { total: 0, moeda, parcelas: 0, ultimoVenc: venc };
-        inadByCliente[cli].total += val;
-        inadByCliente[cli].parcelas++;
-        if (venc > inadByCliente[cli].ultimoVenc) inadByCliente[cli].ultimoVenc = venc;
-      }
+      const cli = String(r[rIdx.cliente] || '').trim() || 'Desconhecido';
+      const val = Math.abs(parseCurrencyValue(r[rIdx.valor]));
+      const moeda = String(r[rIdx.moeda] || 'BRL').toUpperCase();
+      const venc = String(r[rIdx.venc] || '').trim();
+      if (!val) return;
+      if (!inadByCliente[cli]) inadByCliente[cli] = { total: 0, moeda, parcelas: 0, ultimoVenc: venc };
+      inadByCliente[cli].total += val;
+      inadByCliente[cli].parcelas++;
+      if (venc > inadByCliente[cli].ultimoVenc) inadByCliente[cli].ultimoVenc = venc;
     });
-
-    const inadSorted = Object.entries(inadByCliente).sort((a,b) => b[1].total - a[1].total);
-    const totalInad = inadSorted.reduce((s,[,v]) => s + v.total, 0);
-    const totalInadEUR = inadSorted.filter(([,v]) => v.moeda === 'EUR').reduce((s,[,v]) => s + v.total, 0);
-    const totalInadUSD = inadSorted.filter(([,v]) => v.moeda === 'USD').reduce((s,[,v]) => s + v.total, 0);
-    const totalInadBRL = inadSorted.filter(([,v]) => v.moeda === 'BRL').reduce((s,[,v]) => s + v.total, 0);
-
-    const inadBadgeParts = [];
-    if (totalInadBRL > 0) inadBadgeParts.push(fmt(totalInadBRL));
-    if (totalInadEUR > 0) inadBadgeParts.push(`€ ${totalInadEUR.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
-    if (totalInadUSD > 0) inadBadgeParts.push(`$ ${totalInadUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
-
-    document.getElementById('inadTotalBadge').textContent = inadBadgeParts.length ? inadBadgeParts.join(' + ') : '';
-
+    const inadSorted = Object.entries(inadByCliente).sort((a, b) => b[1].total - a[1].total);
+    const totBRL = inadSorted.filter(([, d]) => d.moeda === 'BRL').reduce((s, [, d]) => s + d.total, 0);
+    const totEUR = inadSorted.filter(([, d]) => d.moeda === 'EUR').reduce((s, [, d]) => s + d.total, 0);
+    const totUSD = inadSorted.filter(([, d]) => d.moeda === 'USD').reduce((s, [, d]) => s + d.total, 0);
+    const inadParts = [];
+    if (totBRL > 0) inadParts.push(fmt(totBRL));
+    if (totEUR > 0) inadParts.push(`€ ${totEUR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+    if (totUSD > 0) inadParts.push(`$ ${totUSD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+    document.getElementById('inadTotalBadge').textContent = inadParts.join(' + ');
     document.getElementById('dashInadimplencia').innerHTML = inadSorted.length ? `
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr>
-              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Mentorado</th>
-              <th style="text-align:center;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Parcelas</th>
-              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Último venc.</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Total em atraso</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${inadSorted.map(([cli, d]) => {
-              const valFmt = d.moeda === 'EUR' ? `€ ${d.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}` 
-                           : d.moeda === 'USD' ? `$ ${d.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`
-                           : fmt(d.total);
-              return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 10px;color:var(--text)">${cli}</td>
-                <td style="padding:10px 10px;text-align:center;font-family:var(--mono);color:var(--red)">${d.parcelas}x</td>
-                <td style="padding:10px 10px;font-family:var(--mono);color:var(--muted);font-size:11px">${d.ultimoVenc}</td>
-                <td style="padding:10px 10px;text-align:right;font-family:var(--mono);color:var(--red);font-weight:500">${valFmt}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    ` : '<div style="color:var(--accent);font-size:12px;padding:8px">✓ Nenhuma parcela em atraso!</div>';
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr>
+          <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Mentorado</th>
+          <th style="text-align:center;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Parcelas</th>
+          <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Último venc.</th>
+          <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--mono)">Total em atraso</th>
+        </tr></thead>
+        <tbody>${inadSorted.map(([cli, d]) => {
+          const valFmt = d.moeda === 'EUR' ? `€ ${d.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            : d.moeda === 'USD' ? `$ ${d.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : fmt(d.total);
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:10px">${cli}</td>
+            <td style="padding:10px;text-align:center;font-family:var(--mono);color:var(--red)">${d.parcelas}x</td>
+            <td style="padding:10px;font-family:var(--mono);color:var(--muted);font-size:11px">${d.ultimoVenc}</td>
+            <td style="padding:10px;text-align:right;font-family:var(--mono);color:var(--red);font-weight:500">${valFmt}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>` : '<div style="color:var(--accent);font-size:12px;padding:8px">✓ Nenhuma parcela em atraso!</div>';
 
-    const mesLabel = mesSel === 'all' ? 'todos os meses' : mesSel;
-    document.getElementById('dashSub').textContent = `Dados de ${mesLabel} — ${transRows.length-1} transações · ${inadSorted.length} inadimplentes · atualizado agora`;
+    document.getElementById('dashSub').textContent = `Dados de ${mesSel === 'all' ? 'todos os meses' : mesSel} — ${transRows.length - 1} transações · ${inadSorted.length} inadimplentes · atualizado agora`;
 
   } catch(e) {
     document.getElementById('dashSub').textContent = '✗ Erro: ' + e.message;
+    console.error('Dashboard error:', e);
     toast('Erro ao carregar dashboard: ' + e.message, 'red');
   }
 }
+
 
 function renderBarChart(data, color, fmtFn) {
   const entries = Object.entries(data).sort((a,b) => b[1]-a[1]);
