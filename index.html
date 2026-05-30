@@ -910,12 +910,10 @@ async function loadBriefing() {
   const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
   let sheetsData = '';
 
-  // Tenta conectar mesmo sem token em memória — garantirToken renova automaticamente
-  const googleInfo = localStorage.getItem('q21_google_info');
-  if (googleInfo && shCfg.id && tokenClient) {
+  // Tenta buscar dados do Sheets se tiver token ativo
+  if (googleAccessToken && shCfg.id) {
     try {
-      const token = await garantirToken();
-      googleAccessToken = token;
+      const token = googleAccessToken;
       const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
       const headers = { Authorization: 'Bearer ' + token };
       const [recR, despR, transR] = await Promise.all([
@@ -925,10 +923,14 @@ async function loadBriefing() {
       ]);
       const [rec, desp, trans] = await Promise.all([recR.json(), despR.json(), transR.json()]);
       sheetsData = `Dados da planilha (amostra):\nRecebiveis: ${JSON.stringify(rec.values?.slice(0,10))}\nDespesas futuras: ${JSON.stringify(desp.values?.slice(0,10))}\nTransacoes recentes: ${JSON.stringify(trans.values?.slice(0,10))}`;
-    } catch(e) { sheetsData = 'Planilha não acessível — mostrando briefing geral.'; }
+    } catch(e) { 
+      console.warn('Sheets error in briefing:', e);
+      sheetsData = ''; 
+    }
   }
 
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
+  const temDados = sheetsData.length > 50;
   const prompt = `Você é o copiloto financeiro do Glendon Miranda, empreendedor brasileiro com negócios em Brasil, Europa e EUA.
 
 Estrutura financeira:
@@ -942,7 +944,7 @@ Regras: viagem para evento = PJ_BR, compra pessoal em viagem = PF_BR.
 
 Hoje é ${hoje}.
 
-${sheetsData}
+${temDados ? sheetsData : 'Sem dados da planilha disponíveis agora — gere alertas e insights baseados no contexto do negócio.'}
 
 Gere um briefing diário CONCISO e ÚTIL em português. Formato JSON:
 {
@@ -967,6 +969,8 @@ Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no
     const briefing = JSON.parse(clean.slice(first, last + 1));
     renderBriefing(briefing);
   } catch(e) {
+    console.error('Briefing API error:', e);
+    toast('Erro no briefing: ' + e.message, 'red');
     renderBriefingFallback();
   }
   btn.classList.remove('loading');
@@ -1008,10 +1012,18 @@ function renderBriefing(b) {
 }
 
 function renderBriefingFallback() {
+  const apiKey = getApiKey();
+  const googleInfo = localStorage.getItem('q21_google_info');
+  const msg = apiKey && googleInfo 
+    ? 'Erro ao gerar briefing — verifique o Console (F12) para detalhes'
+    : 'Configure sua API Key e conecte o Google Sheets para ver dados reais';
+  const btn = apiKey && googleInfo
+    ? `<button class="b-alert-btn" onclick="loadBriefing()">Tentar novamente →</button>`
+    : `<button class="b-alert-btn" onclick="toggleSettings()">Configurar →</button>`;
   document.getElementById('briefingPanel').innerHTML = `
     <div class="b-section">
       <div class="b-label">para começar</div>
-      <div class="b-alert"><div class="b-alert-left"><div class="b-alert-dot" style="background:var(--accent)"></div><span>Configure sua API Key e conecte o Google Sheets para ver dados reais</span></div><button class="b-alert-btn" onclick="toggleSettings()">Configurar →</button></div>
+      <div class="b-alert"><div class="b-alert-left"><div class="b-alert-dot" style="background:var(--accent)"></div><span>${msg}</span></div>${btn}</div>
     </div>`;
   document.getElementById('briefingPanel').classList.add('visible');
 }
