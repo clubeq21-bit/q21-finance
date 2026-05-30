@@ -1909,13 +1909,21 @@ async function loadDashboard() {
       return status === 'Paga' && matchMes(r[rIdx.venc]);
     });
 
-    // ── DESPESAS PAGAS (transacoes com valor negativo, somente até hoje)
-    const hojeStr = new Date().toISOString().slice(0,10);
+    // Debug: check what mesSel is and sample dates
+    console.log('mesSel:', mesSel);
+    console.log('sample dates:', transRows.slice(1,5).map(r => r[tIdx.data]));
+    console.log('sample extractMes:', transRows.slice(1,5).map(r => extractMes(r[tIdx.data])));
+    
+    // ── DESPESAS PAGAS — exclui pagamentos de fatura e receitas
+    const TIPOS_EXCLUIDOS = ['PAGAMENTO_CARTAO', 'PAGAMENTO_FATURA', 'RECEITA', 'TRANSFERENCIA'];
     const despPagas = transRows.slice(1).filter(r => {
       const valor = parseCurrencyValue(r[tIdx.valor]);
       if (valor >= 0) return false;
       if (!matchMes(r[tIdx.data])) return false;
-      // Exclui datas futuras (lançamentos futuros)
+      // Exclui tipos que não são despesa real
+      const tipo = String(r[tIdx.tipo]||'').toUpperCase().trim();
+      if (TIPOS_EXCLUIDOS.includes(tipo)) return false;
+      // Exclui datas futuras
       const d = parseDate(r[tIdx.data]);
       if (d && d > new Date()) return false;
       return true;
