@@ -817,6 +817,11 @@ function initGoogleAuth() {
     const info = JSON.parse(saved);
     mostrarGoogleConectado(info.name, info.email);
   }
+  // Restaura token da sessão se existir
+  const sessionToken = sessionStorage.getItem('q21_google_token');
+  if (sessionToken) {
+    googleAccessToken = sessionToken;
+  }
   const cfg = localStorage.getItem('q21_sheets_cfg');
   if (cfg) {
     const c = JSON.parse(cfg);
@@ -832,6 +837,13 @@ function conectarGoogle() {
 }
 
 async function onGoogleConnected(token) {
+  // Salva token na sessão
+  sessionStorage.setItem('q21_google_token', token);
+  setTimeout(() => {
+    sessionStorage.removeItem('q21_google_token');
+    googleAccessToken = null;
+  }, 55 * 60 * 1000);
+
   try {
     const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token } });
     const u = await r.json();
@@ -873,9 +885,36 @@ function salvarConfigSheets() {
 }
 
 async function garantirToken() {
+  // 1. Token em memória ainda válido
   if (googleAccessToken) return googleAccessToken;
+
+  // 2. Token salvo na sessão atual
+  const sessionToken = sessionStorage.getItem('q21_google_token');
+  if (sessionToken) {
+    googleAccessToken = sessionToken;
+    return sessionToken;
+  }
+
+  // 3. Precisa de novo token — tenta sem popup primeiro
+  if (!tokenClient) throw new Error('Google não inicializado');
+  
   return new Promise((resolve, reject) => {
-    tokenClient.callback = (resp) => { if (resp.error) reject(resp.error); else { googleAccessToken = resp.access_token; resolve(resp.access_token); } };
+    tokenClient.callback = (resp) => {
+      if (resp.error) {
+        reject(new Error(resp.error));
+        return;
+      }
+      googleAccessToken = resp.access_token;
+      // Salva na sessão para não pedir de novo
+      sessionStorage.setItem('q21_google_token', resp.access_token);
+      // Token expira em ~1h — limpa automaticamente
+      setTimeout(() => {
+        sessionStorage.removeItem('q21_google_token');
+        googleAccessToken = null;
+      }, 55 * 60 * 1000); // 55 minutos
+      resolve(resp.access_token);
+    };
+    // prompt: '' = tenta silencioso, sem popup se possível
     tokenClient.requestAccessToken({ prompt: '' });
   });
 }
@@ -960,7 +999,7 @@ Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await resp.json();
     const raw = data.content?.find(b => b.type === 'text')?.text || '';
@@ -1182,7 +1221,7 @@ JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"
           const resp = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+            body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
           });
           const d = await resp.json();
           const raw = d.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
@@ -1277,7 +1316,7 @@ Retorne JSON puro sem markdown:
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+          body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
         });
         const aiData = await resp.json();
         const raw = aiData.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
