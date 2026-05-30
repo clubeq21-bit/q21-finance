@@ -1805,9 +1805,6 @@ async function loadDashboard() {
     console.log('rIdx:', rIdx);
 
     // Get selected month filter
-    const mesSel = document.getElementById('dashMes').value;
-
-    // Populate month selector
     // Extrai mês de qualquer formato de data
     function extractMesFromDate(d) {
       if (!d) return '';
@@ -1856,6 +1853,9 @@ async function loadDashboard() {
     sel.innerHTML = '<option value="all">Todos os meses</option>' +
       Array.from(meses).sort().reverse().map(m => `<option value="${m}" ${(cur?cur:defaultMes)===m?'selected':''}>${m}</option>`).join('');
     if (!cur) document.getElementById('dashMes').value = defaultMes;
+
+    // Read selected month AFTER selector is populated
+    const mesSel = document.getElementById('dashMes').value || defaultMes;
 
     // Filter function
     function extractMes(dateStr) {
