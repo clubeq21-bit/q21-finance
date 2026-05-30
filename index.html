@@ -999,7 +999,7 @@ Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await resp.json();
     const raw = data.content?.find(b => b.type === 'text')?.text || '';
@@ -1221,7 +1221,7 @@ JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"
           const resp = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-            body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+            body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
           });
           const d = await resp.json();
           const raw = d.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
@@ -1316,7 +1316,7 @@ Retorne JSON puro sem markdown:
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+          body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
         });
         const aiData = await resp.json();
         const raw = aiData.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
@@ -1390,7 +1390,7 @@ Regra: restaurante Itabirinha→Pessoal, hospedagem Lisboa→Missão Portugal, f
 Despesas: \${JSON.stringify(batch.map(r => ({ id: r[idx.id], desc: r[idx.desc], entidade: r[idx.ent]||'', projeto: r[idx.proj]||'' })))}
 JSON puro: {"sugestoes":[{"id":"...","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","projeto":"Pessoal","confianca":"alta"}]}`;
         try {
-          const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:prompt}]}) });
+          const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,messages:[{role:'user',content:prompt}]}) });
           const d = await resp.json();
           const raw = d.content?.find(b=>b.type==='text')?.text||'{"sugestoes":[]}';
           const clean = raw.replace(/```json|```/g,'').trim();
@@ -1667,7 +1667,7 @@ async function processarComClaude() {
     if (pdfBase64) messages = [{ role:'user', content: [{ type:'document', source:{type:'base64',media_type:'application/pdf',data:pdfBase64} }, { type:'text', text:'Extraia todas as transações desta fatura.' }] }];
     else messages = [{ role:'user', content:'Extraia as transações:\n\n'+texto }];
     setProgress(50, 'Claude analisando...');
-    const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,system:systemPrompt,messages}) });
+    const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:8000,system:systemPrompt,messages}) });
     if (!resp.ok) { const e=await resp.json(); throw new Error(e.error?.message||'Erro API '+resp.status); }
     const data = await resp.json();
     const raw = data.content?.find(b=>b.type==='text')?.text||'';
