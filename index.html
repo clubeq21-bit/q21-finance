@@ -1001,6 +1001,11 @@ Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('Anthropic briefing error:', resp.status, errText);
+      throw new Error(`API ${resp.status}: ${errText.slice(0,200)}`);
+    }
     const data = await resp.json();
     const raw = data.content?.find(b => b.type === 'text')?.text || '';
     const clean = raw.replace(/```json|```/g, '').trim();
