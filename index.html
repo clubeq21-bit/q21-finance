@@ -999,7 +999,7 @@ Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
     if (!resp.ok) {
       const errText = await resp.text();
@@ -1226,7 +1226,7 @@ JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"
           const resp = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-            body: JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
           });
           const d = await resp.json();
           const raw = d.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
@@ -1321,7 +1321,7 @@ Retorne JSON puro sem markdown:
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
         });
         const aiData = await resp.json();
         const raw = aiData.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
@@ -1395,7 +1395,7 @@ Regra: restaurante Itabirinha→Pessoal, hospedagem Lisboa→Missão Portugal, f
 Despesas: \${JSON.stringify(batch.map(r => ({ id: r[idx.id], desc: r[idx.desc], entidade: r[idx.ent]||'', projeto: r[idx.proj]||'' })))}
 JSON puro: {"sugestoes":[{"id":"...","desc":"...","categoria":"...","subcategoria":"...","entidade":"PF_BR","projeto":"Pessoal","confianca":"alta"}]}`;
         try {
-          const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-5-20250929',max_tokens:4000,messages:[{role:'user',content:prompt}]}) });
+          const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:prompt}]}) });
           const d = await resp.json();
           const raw = d.content?.find(b=>b.type==='text')?.text||'{"sugestoes":[]}';
           const clean = raw.replace(/```json|```/g,'').trim();
@@ -1672,7 +1672,7 @@ async function processarComClaude() {
     if (pdfBase64) messages = [{ role:'user', content: [{ type:'document', source:{type:'base64',media_type:'application/pdf',data:pdfBase64} }, { type:'text', text:'Extraia todas as transações desta fatura.' }] }];
     else messages = [{ role:'user', content:'Extraia as transações:\n\n'+texto }];
     setProgress(50, 'Claude analisando...');
-    const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-5-20250929',max_tokens:8000,system:systemPrompt,messages}) });
+    const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,system:systemPrompt,messages}) });
     if (!resp.ok) { const e=await resp.json(); throw new Error(e.error?.message||'Erro API '+resp.status); }
     const data = await resp.json();
     const raw = data.content?.find(b=>b.type==='text')?.text||'';
@@ -1900,55 +1900,50 @@ async function loadDashboard() {
     function fmtEur(n) { return '€ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
     function fmtUsd(n) { return '$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
 
-    // ── RECEITAS (transacoes onde Tipo = RECEITA ou Valor > 0)
-    const receitas = transRows.slice(1).filter(r => {
-      const tipo = String(r[tIdx.tipo]||'').toUpperCase();
-      const valor = parseFloat(r[tIdx.valor]||0);
-      return matchMes(r[tIdx.data]) && (tipo === 'RECEITA' || valor > 0);
+    // ── RECEITAS REAIS = recebíveis com Status_Parcela = "Paga" no mês selecionado
+    const recPagas = recRows.slice(1).filter(r => {
+      const status = String(r[rIdx.status]||'').trim();
+      return status === 'Paga' && matchMes(r[rIdx.venc]);
     });
 
-    // ── DESPESAS PAGAS (transacoes onde Tipo = CARTAO/DESPESA e Valor < 0)
+    // ── DESPESAS PAGAS (transacoes com valor negativo)
     const despPagas = transRows.slice(1).filter(r => {
-      const tipo = String(r[tIdx.tipo]||'').toUpperCase();
-      const valor = parseFloat(r[tIdx.valor]||0);
-      return matchMes(r[tIdx.data]) && (tipo === 'CARTAO' || tipo === 'DESPESA') && valor < 0;
+      const valor = parseCurrencyValue(r[tIdx.valor]);
+      return matchMes(r[tIdx.data]) && valor < 0;
     });
 
-    const totalReceita  = receitas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
-    const totalDespesas = despPagas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
-    const saldo = totalReceita - totalDespesas;
+    // Totais por moeda — receitas dos recebíveis pagos
+    const recBRL = recPagas.filter(r => String(r[rIdx.moeda]||'BRL').toUpperCase() !== 'EUR' && String(r[rIdx.moeda]||'BRL').toUpperCase() !== 'USD').reduce((s,r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+    const recEUR = recPagas.filter(r => String(r[rIdx.moeda]||'').toUpperCase() === 'EUR').reduce((s,r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+    const recUSD = recPagas.filter(r => String(r[rIdx.moeda]||'').toUpperCase() === 'USD').reduce((s,r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
 
-    // ── PARCELAS FUTURAS (despesas Previstas vencendo em 30 dias)
+    const totalDespesas = despPagas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+    const saldo = recBRL - totalDespesas;
+
+    let recLabel = fmt(recBRL);
+    if (recEUR > 0) recLabel += ` + €${recEUR.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+    if (recUSD > 0) recLabel += ` + $${recUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+    document.getElementById('kpiReceita').textContent = recLabel;
+    document.getElementById('kpiReceita').style.fontSize = (recEUR > 0 || recUSD > 0) ? '13px' : '';
+    document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
+    const saldoEl = document.getElementById('kpiSaldo');
+    saldoEl.textContent = fmt(saldo);
+    saldoEl.className = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
+    // ── PARCELAS FUTURAS
     const parcFuturas = despRows.slice(1).filter(r => {
       const status = String(r[dIdx.status]||'').trim();
       const venc = parseDate(r[dIdx.venc]);
       return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
     });
     const totalFuturo = parcFuturas.reduce((s,r) => s + Math.abs(parseCurrencyValue(r[dIdx.valor])), 0);
-
-    // Update KPIs
-    // Receita por moeda
-    const recBRL = receitas.filter(r => String(r[tIdx.moeda]||'BRL').toUpperCase() === 'BRL').reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
-    const recEUR = receitas.filter(r => String(r[tIdx.moeda]||'').toUpperCase() === 'EUR').reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
-    const recUSD = receitas.filter(r => String(r[tIdx.moeda]||'').toUpperCase() === 'USD').reduce((s,r) => s + Math.abs(parseFloat(r[tIdx.valor]||0)), 0);
-    
-    let recLabel = fmt(recBRL);
-    if (recEUR > 0) recLabel += ` + €${recEUR.toLocaleString('pt-BR',{minimumFractionDigits:0})}`;
-    if (recUSD > 0) recLabel += ` + $${recUSD.toLocaleString('pt-BR',{minimumFractionDigits:0})}`;
-    document.getElementById('kpiReceita').textContent = recLabel;
-    document.getElementById('kpiReceita').style.fontSize = (recEUR > 0 || recUSD > 0) ? '14px' : '';
-    document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
-    const saldoEl = document.getElementById('kpiSaldo');
-    saldoEl.textContent = fmt(saldo);
-    saldoEl.className = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
     document.getElementById('kpiFuturo').textContent = fmt(totalFuturo);
 
-    // ── RECEITAS POR ENTIDADE
+    // ── RECEITAS POR ENTIDADE (recebíveis pagos)
     const recByEnt = {};
-    receitas.forEach(r => {
-      const ent = r[tIdx.ent] || 'Sem entidade';
-      const val = Math.abs(parseFloat(r[tIdx.valor]||0));
-      recByEnt[ent] = (recByEnt[ent]||0) + val;
+    recPagas.forEach(r => {
+      const ent = r[rIdx.ent] || 'Sem entidade';
+      const val = Math.abs(parseCurrencyValue(r[rIdx.valor]));
+      if (val > 0) recByEnt[ent] = (recByEnt[ent]||0) + val;
     });
     document.getElementById('dashRecEntidade').innerHTML = renderBarChart(recByEnt, 'green', fmt);
 
