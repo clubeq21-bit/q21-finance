@@ -583,7 +583,6 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       </div>
     </div>
   </div>
-</div>
 
 <!-- DASHBOARD PAGE -->
 <div class="page" id="page-dashboard">
@@ -654,6 +653,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       <div id="dashInadimplencia"></div>
     </div>
   </div>
+</div>
 </div>
 
 <!-- SETTINGS OVERLAY -->
@@ -1883,12 +1883,13 @@ async function loadDashboard() {
 
     const sel = document.getElementById('dashMes');
     const curMes = sel.value;
-    const defaultMes = '2026/05';
+    const now = new Date();
+    const defaultMes = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
     sel.innerHTML = '<option value="all">Todos os meses</option>' +
       Array.from(meses).sort().reverse().map(m =>
         `<option value="${m}" ${(curMes || defaultMes) === m ? 'selected' : ''}>${m}</option>`
       ).join('');
-    if (!curMes) sel.value = defaultMes;
+    if (!curMes) sel.value = meses.has(defaultMes) ? defaultMes : (Array.from(meses).sort().reverse()[0] || 'all');
 
     const mesSel = sel.value;
     const hoje = new Date();
