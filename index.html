@@ -373,6 +373,19 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+/* ── RECEBIMENTOS ──────────────────────────────── */
+.rec-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;transition:border-color 0.15s}
+.rec-card:hover{border-color:var(--border2)}
+.rec-kpi-wrap{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.rec-kpi{padding:10px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;min-width:140px}
+.rec-kpi-val{font-size:18px;font-weight:500;font-family:var(--mono)}
+.rec-kpi-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+/* Dar baixa modal */
+.db-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:300;align-items:center;justify-content:center;padding:20px}
+.db-panel{background:var(--bg);border:1px solid var(--border2);border-radius:14px;padding:24px 28px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.db-cliente{font-size:18px;font-weight:500;color:var(--text);margin-bottom:4px}
+.db-info{font-size:12px;color:var(--muted);margin-bottom:20px}
 </style>
 </head>
 <body>
@@ -406,6 +419,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       <button class="nav-btn" onclick="showPage('invoices')" id="nav-invoices">Faturas</button>
       <button class="nav-btn" onclick="showPage('review')" id="nav-review">Revisão</button>
       <button class="nav-btn" onclick="showPage('dashboard'); loadDashboard()" id="nav-dashboard">Dashboard</button>
+      <button class="nav-btn" onclick="showPage('recebimentos'); loadRecebimentos()" id="nav-recebimentos">Recebimentos</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
       <div class="nav-btn" id="apiStatusBadge"><div class="dot" id="apiDot"></div><span id="apiStatusText">sem API</span></div>
       <div class="nav-btn" id="sheetsStatusBadge"><div class="dot" id="sheetsDot"></div><span id="sheetsStatusText">sem Sheets</span></div>
@@ -654,6 +668,74 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
     </div>
   </div>
 </div>
+
+<!-- ── RECEBIMENTOS PAGE ── -->
+<div class="page" id="page-recebimentos">
+  <div class="page-inner" style="max-width:720px">
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="page-title">Recebimentos</div>
+        <div class="page-sub">Busque o cliente e dê baixa nas parcelas pagas</div>
+      </div>
+      <button class="btn" onclick="loadRecebimentos()" style="font-size:12px">↺ Atualizar</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <input type="text" id="recSearch" placeholder="Buscar cliente ou produto..." oninput="renderRecebimentos()"
+             style="flex:1;min-width:180px;font-size:13px;padding:8px 12px">
+      <select id="recTab" onchange="renderRecebimentos()" style="font-size:12px;padding:8px 10px;font-family:var(--mono);width:auto;flex-shrink:0">
+        <option value="pendentes">Pendentes</option>
+        <option value="mes">Recebidos este mês</option>
+        <option value="todos">Todos</option>
+      </select>
+    </div>
+
+    <div id="recSummary" class="rec-kpi-wrap"></div>
+    <div id="recList"><div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Clique em ↺ Atualizar para carregar os recebíveis.</div></div>
+  </div>
+</div>
+
+<!-- ── DAR BAIXA MODAL ── -->
+<div class="db-modal" id="darBaixaModal" onclick="if(event.target===this)fecharDarBaixa()">
+  <div class="db-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Dar Baixa</div>
+      <button class="close-btn" onclick="fecharDarBaixa()">✕</button>
+    </div>
+    <div class="db-cliente" id="dbCliente"></div>
+    <div class="db-info" id="dbInfo"></div>
+
+    <div class="form-group">
+      <label>Data do pagamento</label>
+      <input type="date" id="dbData">
+    </div>
+    <div class="form-group">
+      <label>Conta de recebimento</label>
+      <select id="dbConta">
+        <option value="ASAAS_PJ">ASAAS — PJ Brasil</option>
+        <option value="BB_PF">Banco do Brasil — PF</option>
+        <option value="INFINITY_PJ">Infinity — PJ</option>
+        <option value="REV_EU_PF">Revolut EU — PF Europa</option>
+        <option value="REV_US">Revolut US — LLC</option>
+        <option value="STRIPE_US">Stripe — LLC</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Valor recebido &nbsp;<span id="dbMoeda" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span></label>
+      <input type="text" id="dbValor" placeholder="0,00">
+    </div>
+    <div class="form-group">
+      <label>Observação <span style="color:var(--muted);font-size:11px">(opcional)</span></label>
+      <input type="text" id="dbObs" placeholder="PIX, ASAAS, TED...">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="fecharDarBaixa()">Cancelar</button>
+      <button class="btn primary" id="dbConfirmBtn" onclick="confirmarBaixa()">✓ Confirmar</button>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <!-- SETTINGS OVERLAY -->
@@ -2186,6 +2268,261 @@ function removerProjeto(idx) {
   saveProjetos(lista);
   renderProjetosLista();
   toast('Removido: ' + nome);
+}
+
+// ── RECEBIMENTOS ──────────────────────────────────────────
+
+let recData = [];
+let recHeaders = [];
+
+async function loadRecebimentos() {
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id) { toast('Configure o Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
+  if (!googleAccessToken) { toast('Conecte o Google Sheets ⚙', 'red'); toggleSettings(); return; }
+
+  const el = document.getElementById('recList');
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Carregando...</div>';
+  document.getElementById('recSummary').innerHTML = '';
+
+  try {
+    const resp = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values/recebiveis!A1:R500`,
+      { headers: { Authorization: 'Bearer ' + googleAccessToken } }
+    );
+    if (!resp.ok) throw new Error('Sheets ' + resp.status);
+    const data = await resp.json();
+    const rows = data.values || [];
+    if (rows.length < 2) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center">Sem recebíveis cadastrados.</div>'; return; }
+
+    recHeaders = rows[0];
+    const get = (row, col) => { const i = recHeaders.indexOf(col); return i !== -1 ? (row[i] || '') : ''; };
+
+    recData = rows.slice(1).map((row, i) => ({
+      rowIndex: i + 2,
+      id:       get(row,'ID_Recebivel'),
+      cliente:  get(row,'Cliente'),
+      produto:  get(row,'Produto'),
+      entidade: get(row,'Entidade'),
+      moeda:    get(row,'Moeda'),
+      parcNum:  get(row,'Parcela_Num'),
+      qtdParc:  get(row,'Qtd_Parcelas'),
+      venc:     get(row,'Vencimento'),
+      valor:    parseFloat(String(get(row,'Valor_Parcela')).replace(/[R$€\s]/g,'').replace(/\./g,'').replace(',','.')) || 0,
+      status:   get(row,'Status_Parcela'),
+      dataPag:  get(row,'Data_Pagamento'),
+      conta:    get(row,'ID_Conta_Recebimento'),
+    }));
+
+    renderRecebimentos();
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px">Erro: ${e.message}</div>`;
+    toast('Erro ao carregar: ' + e.message, 'red');
+  }
+}
+
+function renderRecebimentos() {
+  const q   = (document.getElementById('recSearch')?.value || '').toLowerCase().trim();
+  const tab = document.getElementById('recTab')?.value || 'pendentes';
+
+  const now       = new Date();
+  const mesAtual  = `${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+
+  let items = recData.filter(r => {
+    if (tab === 'pendentes') return r.status === 'Prevista' || r.status === 'Vencida';
+    if (tab === 'mes') {
+      if (r.status !== 'Paga') return false;
+      const dp = r.dataPag || r.venc;
+      if (!dp) return false;
+      const parts = dp.split('/');
+      return parts.length === 3 && `${parts[1]}/${parts[2]}` === mesAtual;
+    }
+    return true;
+  });
+
+  if (q) items = items.filter(r =>
+    r.cliente.toLowerCase().includes(q) || r.produto.toLowerCase().includes(q)
+  );
+
+  // Totais pendentes por moeda
+  const pend = recData.filter(r => r.status === 'Prevista' || r.status === 'Vencida');
+  const totais = { BRL: 0, EUR: 0, USD: 0 };
+  pend.forEach(r => { if (totais[r.moeda] !== undefined) totais[r.moeda] += r.valor; });
+  const fmtVal = (v, m) => {
+    const n = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return m === 'EUR' ? `€ ${n}` : m === 'USD' ? `$ ${n}` : `R$ ${n}`;
+  };
+
+  document.getElementById('recSummary').innerHTML = [
+    totais.BRL > 0 ? `<div class="rec-kpi"><span class="rec-kpi-val" style="color:var(--red)">${fmtVal(totais.BRL,'BRL')}</span><span class="rec-kpi-lbl">pendente BRL · ${pend.filter(r=>r.moeda==='BRL').length}x</span></div>` : '',
+    totais.EUR > 0 ? `<div class="rec-kpi"><span class="rec-kpi-val" style="color:var(--accent2)">${fmtVal(totais.EUR,'EUR')}</span><span class="rec-kpi-lbl">pendente EUR · ${pend.filter(r=>r.moeda==='EUR').length}x</span></div>` : '',
+    totais.USD > 0 ? `<div class="rec-kpi"><span class="rec-kpi-val" style="color:var(--amber)">${fmtVal(totais.USD,'USD')}</span><span class="rec-kpi-lbl">pendente USD · ${pend.filter(r=>r.moeda==='USD').length}x</span></div>` : '',
+  ].join('');
+
+  const el = document.getElementById('recList');
+  if (!items.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">${
+      q ? 'Nenhum cliente encontrado.' :
+      tab === 'pendentes' ? '✓ Nenhum recebível pendente!' :
+      tab === 'mes' ? 'Nenhum recebimento registrado este mês.' : 'Sem recebíveis.'
+    }</div>`;
+    return;
+  }
+
+  // Sort: Vencidas primeiro, depois por vencimento
+  items = items.slice().sort((a, b) => {
+    const sv = s => s === 'Vencida' ? 0 : s === 'Prevista' ? 1 : 2;
+    if (sv(a.status) !== sv(b.status)) return sv(a.status) - sv(b.status);
+    return (a.venc || '').localeCompare(b.venc || '');
+  });
+
+  const todayMs = new Date().setHours(0,0,0,0);
+
+  el.innerHTML = items.map(r => {
+    const isVencida = r.status === 'Vencida';
+    const isPaga    = r.status === 'Paga';
+    const statusColor = isVencida ? 'var(--red)' : isPaga ? 'var(--accent)' : 'var(--amber)';
+    const statusBg    = isVencida ? 'rgba(239,75,75,0.12)' : isPaga ? 'rgba(0,212,170,0.1)' : 'rgba(255,184,0,0.1)';
+
+    let diasBadge = '';
+    if (isVencida && r.venc) {
+      const [dd, mm, yy] = r.venc.split('/');
+      if (dd && mm && yy) {
+        const diff = Math.floor((todayMs - new Date(+yy, +mm-1, +dd).setHours(0,0,0,0)) / 86400000);
+        if (diff > 0) diasBadge = `<span style="font-size:10px;color:var(--red);margin-left:5px;font-family:var(--mono)">${diff}d</span>`;
+      }
+    }
+
+    const parcLabel = Number(r.qtdParc) > 1 ? ` ${r.parcNum}/${r.qtdParc}` : '';
+    const valorFmt  = fmtVal(r.valor, r.moeda);
+
+    const acaoHtml = (!isPaga)
+      ? `<button class="btn primary" style="font-size:11px;padding:5px 14px;flex-shrink:0;white-space:nowrap" onclick="abrirDarBaixa(${r.rowIndex})">Dar Baixa</button>`
+      : `<div style="font-size:11px;color:var(--accent);font-family:var(--mono);text-align:right;flex-shrink:0">${r.dataPag}<br><span style="color:var(--muted)">${r.conta}</span></div>`;
+
+    return `<div class="rec-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+            <span style="font-size:14px;font-weight:500;color:var(--text)">${r.cliente}</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:99px;background:${statusBg};color:${statusColor};font-family:var(--mono)">${r.status}${diasBadge}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">${r.produto}${parcLabel} &middot; ${r.entidade}</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-size:16px;font-weight:500;font-family:var(--mono);color:${statusColor}">${valorFmt}</span>
+            <span style="font-size:11px;color:var(--muted)">vence ${r.venc}</span>
+          </div>
+        </div>
+        ${acaoHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let _baixaRow = null;
+
+function abrirDarBaixa(rowIndex) {
+  const r = recData.find(x => x.rowIndex === rowIndex);
+  if (!r) return;
+  _baixaRow = r;
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  document.getElementById('dbCliente').textContent = r.cliente;
+  document.getElementById('dbInfo').textContent    = `${r.produto}${Number(r.qtdParc) > 1 ? ` · Parcela ${r.parcNum}/${r.qtdParc}` : ''} · ${r.entidade} · Vence ${r.venc}`;
+  document.getElementById('dbData').value          = hoje;
+  document.getElementById('dbMoeda').textContent   = r.moeda;
+  document.getElementById('dbValor').value         = r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.getElementById('dbObs').value           = '';
+
+  const contaSel = document.getElementById('dbConta');
+  if (r.moeda === 'EUR') contaSel.value = 'REV_EU_PF';
+  else if (r.moeda === 'USD') contaSel.value = 'STRIPE_US';
+  else contaSel.value = 'ASAAS_PJ';
+
+  document.getElementById('dbConfirmBtn').disabled = false;
+  document.getElementById('dbConfirmBtn').textContent = '✓ Confirmar';
+  document.getElementById('darBaixaModal').style.display = 'flex';
+}
+
+function fecharDarBaixa() {
+  document.getElementById('darBaixaModal').style.display = 'none';
+  _baixaRow = null;
+}
+
+async function confirmarBaixa() {
+  if (!_baixaRow) return;
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id || !googleAccessToken) { toast('Sem conexão com Sheets', 'red'); return; }
+
+  const dateVal = document.getElementById('dbData').value;
+  if (!dateVal) { toast('Informe a data do pagamento', 'red'); return; }
+  const [y, m, d] = dateVal.split('-');
+  const dataBR = `${d}/${m}/${y}`;
+
+  const valorRaw = document.getElementById('dbValor').value.replace(/\./g,'').replace(',','.');
+  const valor = parseFloat(valorRaw);
+  if (isNaN(valor) || valor <= 0) { toast('Valor inválido', 'red'); return; }
+
+  const conta   = document.getElementById('dbConta').value;
+  const obs     = document.getElementById('dbObs').value.trim();
+  const r       = _baixaRow;
+
+  const btn = document.getElementById('dbConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  try {
+    const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}`;
+    const hdrs    = { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' };
+
+    // 1. Atualiza recebiveis: Status_Parcela, Data_Pagamento, ID_Conta_Recebimento
+    const ci = n => recHeaders.indexOf(n) + 1;
+    const updates = [
+      { range: `recebiveis!${colLetter(ci('Status_Parcela'))}${r.rowIndex}`,      values: [['Paga']] },
+      { range: `recebiveis!${colLetter(ci('Data_Pagamento'))}${r.rowIndex}`,      values: [[dataBR]] },
+      { range: `recebiveis!${colLetter(ci('ID_Conta_Recebimento'))}${r.rowIndex}`,values: [[conta]] },
+    ];
+    if (obs && ci('Observações') > 0) {
+      updates.push({ range: `recebiveis!${colLetter(ci('Observações'))}${r.rowIndex}`, values: [[obs]] });
+    }
+
+    const updResp = await fetch(`${baseUrl}/values:batchUpdate`, {
+      method: 'POST', headers: hdrs,
+      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updates })
+    });
+    if (!updResp.ok) { const e = await updResp.json(); throw new Error(e.error?.message || updResp.status); }
+
+    // 2. Adiciona entrada em transacoes
+    const contaMap = { BB_PF:'Banco do Brasil', ASAAS_PJ:'ASAAS', REV_EU_PF:'Revolut EU', INFINITY_PJ:'Infinity', REV_US:'Revolut US', STRIPE_US:'Stripe' };
+    const contaNome  = contaMap[conta] || conta;
+    const parcLabel  = Number(r.qtdParc) > 1 ? ` ${r.parcNum}/${r.qtdParc}` : '';
+    const descricao  = `${r.cliente} - ${r.produto}${parcLabel}`;
+    const transId    = `REC_${Date.now()}`;
+
+    const transRow = [
+      transId, dataBR, descricao,
+      valor.toFixed(2).replace('.',','),
+      r.moeda, contaNome, conta, 'Manual',
+      'Receita', 'Receita', r.produto, '',
+      r.entidade, 'Confirmado',
+      obs || 'Baixa manual — Finance Hub', ''
+    ];
+
+    const appResp = await fetch(`${baseUrl}/values/transacoes:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+      method: 'POST', headers: hdrs,
+      body: JSON.stringify({ values: [transRow] })
+    });
+    if (!appResp.ok) { const e = await appResp.json(); throw new Error(e.error?.message || appResp.status); }
+
+    const fmtV = v => r.moeda === 'EUR' ? `€ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : r.moeda === 'USD' ? `$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : `R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+    toast(`✓ Baixa registrada! ${r.cliente} — ${fmtV(valor)}`, 'green');
+    fecharDarBaixa();
+    loadRecebimentos();
+
+  } catch(e) {
+    toast('Erro ao salvar: ' + e.message, 'red');
+    btn.disabled = false;
+    btn.textContent = '✓ Confirmar';
+  }
 }
 
 // ── TOAST ──────────────────────────────────────────
