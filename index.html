@@ -607,7 +607,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
         <div class="page-sub" id="dashSub">Carregando dados...</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <select id="dashMes" onchange="loadDashboard()" style="width:auto;font-family:var(--mono);font-size:12px;padding:6px 10px">
+        <select id="dashMes" onchange="this.dataset.userSelected='1'; loadDashboard()" style="width:auto;font-family:var(--mono);font-size:12px;padding:6px 10px">
           <option value="all">Todos os meses</option>
         </select>
         <button class="btn" onclick="loadDashboard()" style="font-size:12px">↺ Atualizar</button>
@@ -1964,14 +1964,15 @@ async function loadDashboard() {
     despRows.slice(1).forEach(r => { const m = getMesAno(r[dIdx.venc]); if (m) meses.add(m); });
 
     const sel = document.getElementById('dashMes');
-    const curMes = sel.value;
+    const curMes = sel.dataset.userSelected === '1' ? sel.value : null;
     const now = new Date();
     const defaultMes = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+    const mesPadrao = curMes || (meses.has(defaultMes) ? defaultMes : (Array.from(meses).sort().reverse()[0] || 'all'));
     sel.innerHTML = '<option value="all">Todos os meses</option>' +
       Array.from(meses).sort().reverse().map(m =>
-        `<option value="${m}" ${(curMes || defaultMes) === m ? 'selected' : ''}>${m}</option>`
+        `<option value="${m}" ${mesPadrao === m ? 'selected' : ''}>${m}</option>`
       ).join('');
-    if (!curMes) sel.value = meses.has(defaultMes) ? defaultMes : (Array.from(meses).sort().reverse()[0] || 'all');
+    sel.value = mesPadrao;
 
     const mesSel = sel.value;
     const hoje = new Date();
