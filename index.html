@@ -420,6 +420,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       <button class="nav-btn" onclick="showPage('review')" id="nav-review">Revisão</button>
       <button class="nav-btn" onclick="showPage('dashboard'); loadDashboard()" id="nav-dashboard">Dashboard</button>
       <button class="nav-btn" onclick="showPage('recebimentos'); loadRecebimentos()" id="nav-recebimentos">Recebimentos</button>
+        <button class="nav-btn" id="nav-pagamentos" onclick="showPage('pagamentos'); loadFaturasPagar()">💳 Pagamentos</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
       <div class="nav-btn" id="apiStatusBadge"><div class="dot" id="apiDot"></div><span id="apiStatusText">sem API</span></div>
       <div class="nav-btn" id="sheetsStatusBadge"><div class="dot" id="sheetsDot"></div><span id="sheetsStatusText">sem Sheets</span></div>
@@ -694,6 +695,19 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
     <div id="recList"><div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Clique em ↺ Atualizar para carregar os recebíveis.</div></div>
   </div>
 </div>
+      <div class="page" id="page-pagamentos">
+        <div class="page-inner">
+          <div class="page-header">
+            <div>
+              <div class="page-title">💳 Pagamentos de Fatura</div>
+              <div class="page-sub">Dê baixa nas faturas de cartão quando o pagamento for feito</div>
+            </div>
+            <button class="btn" onclick="loadFaturasPagar()">Atualizar</button>
+          </div>
+          <div id="pagSummary" class="rec-kpi-wrap"></div>
+          <div id="pagList"></div>
+        </div>
+      </div>
 
 <!-- ── DAR BAIXA MODAL ── -->
 <div class="db-modal" id="darBaixaModal" onclick="if(event.target===this)fecharDarBaixa()">
@@ -735,6 +749,29 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
     </div>
   </div>
 </div>
+    <div class="db-modal" id="faturaBaixaModal">
+      <div class="db-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="page-title">Dar baixa em fatura</div>
+          <button class="close-btn" onclick="fecharDarBaixaFatura()">&times;</button>
+        </div>
+        <div id="fbCartao" class="db-cliente"></div>
+        <div id="fbInfo" class="db-info"></div>
+        <div class="form-group">
+          <label>Data do pagamento</label>
+          <input type="date" id="fbData">
+        </div>
+        <div class="form-group">
+          <label>Valor pago (<span id="fbMoeda"></span>)</label>
+          <input type="text" id="fbValor">
+        </div>
+        <div class="form-group">
+          <label>Observação (opcional)</label>
+          <input type="text" id="fbObs" placeholder="ex: pago via Pix">
+        </div>
+        <button class="btn" id="fbConfirmBtn" onclick="confirmarBaixaFatura()" style="width:100%;margin-top:8px">Confirmar baixa</button>
+      </div>
+    </div>
 
 </div>
 
@@ -2525,6 +2562,139 @@ async function confirmarBaixa() {
     btn.textContent = '✓ Confirmar';
   }
 }
+
+    // ===== Pagamentos de Fatura (dar baixa em despesas) =====
+    const Q21_SSID = '1sj5aUAndt48UU8kEABW3sonadlqji8o42ET-7FnWcU8';
+
+    function pagParseBRDate(s) {
+      if (!s) return new Date(0);
+      const parts = String(s).trim().split('/');
+      if (parts.length < 3) return new Date(0);
+      const [d,m,y] = parts;
+      return new Date(+y, (+m)-1, +d);
+    }
+    function pagFmt(n) {
+      return 'R$ ' + Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+
+    async function loadFaturasPagar() {
+      const listEl = document.getElementById('pagList');
+      const sumEl = document.getElementById('pagSummary');
+      listEl.innerHTML = '<div style="padding:20px;color:var(--muted)">Carregando...</div>';
+      try {
+        const token = await garantirToken();
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${Q21_SSID}/values/despesas!A2:V3000`;
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) throw new Error('Falha ao ler despesas: ' + res.status);
+        const data = await res.json();
+        const rows = data.values || [];
+        const groups = {};
+        rows.forEach((r, idx) => {
+          const status = (r[16] || '').trim();
+          if (status === 'Paga' || !r[0]) return;
+          const idConta = (r[15] || '').trim();
+          const venc = (r[11] || '').trim();
+          if (!idConta || !venc) return;
+          const key = idConta + '|' + venc;
+          if (!groups[key]) {
+            groups[key] = { idConta, venc, cartao: r[14] || idConta, moeda: r[8] || 'BRL', rows: [], total: 0 };
+          }
+          const valor = Math.abs(parseCurrencyValue(r[12] || '0'));
+          groups[key].rows.push({ sheetRow: idx + 2, id: r[0], valor });
+          groups[key].total += valor;
+        });
+        const hoje = new Date(); hoje.setHours(0,0,0,0);
+        const limite = new Date(hoje.getTime() + 40*24*60*60*1000);
+        const allList = Object.values(groups).sort((a,b) => pagParseBRDate(a.venc) - pagParseBRDate(b.venc));
+        const list = allList.filter(g => pagParseBRDate(g.venc) <= limite);
+        const futureCount = allList.length - list.length;
+        window.__pagGroups = groups;
+        const totalAberto = list.reduce((s,g)=>s+g.total,0);
+        const vencidas = list.filter(g => pagParseBRDate(g.venc) < hoje).length;
+        sumEl.innerHTML = `
+          <div class="rec-kpi"><div class="rec-kpi-val">${list.length}</div><div class="rec-kpi-lbl">Faturas a pagar</div></div>
+          <div class="rec-kpi"><div class="rec-kpi-val">${pagFmt(totalAberto)}</div><div class="rec-kpi-lbl">Total a pagar</div></div>
+          <div class="rec-kpi"><div class="rec-kpi-val" style="color:${vencidas?'#f66':'inherit'}">${vencidas}</div><div class="rec-kpi-lbl">Vencidas</div></div>
+        `;
+        if (!list.length) {
+          listEl.innerHTML = '<div style="padding:20px;color:var(--muted)">Nenhuma fatura a pagar nos próximos 40 dias.</div>';
+          return;
+        }
+        listEl.innerHTML = list.map(g => {
+          const key = g.idConta + '|' + g.venc;
+          const isVencida = pagParseBRDate(g.venc) < hoje;
+          return `
+            <div class="rec-card" style="display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid ${isVencida ? '#f66' : 'var(--border)'};border-radius:10px;margin-bottom:8px">
+              <div>
+                <div style="font-weight:600">${escHtml(g.cartao)} ${isVencida ? '<span style="color:#f66;font-size:11px">VENCIDA</span>' : ''}</div>
+                <div style="font-size:12px;color:var(--muted)">Vencimento ${escHtml(g.venc)} · ${g.rows.length} parcela(s)</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="font-weight:600">${pagFmt(g.total)}</div>
+                <button class="btn" onclick="abrirDarBaixaFatura('${key.replace(/'/g,"\\'")}')">Dar baixa</button>
+              </div>
+            </div>
+          `;
+        }).join('') + (futureCount ? `<div style="padding:10px;color:var(--muted);font-size:12px">+ ${futureCount} parcela(s) futura(s) além de 40 dias (não exibidas)</div>` : '');
+      } catch (e) {
+        listEl.innerHTML = '<div style="padding:20px;color:#f66">Erro: ' + escHtml(String(e.message||e)) + '</div>';
+      }
+    }
+
+    function abrirDarBaixaFatura(key) {
+      const g = window.__pagGroups[key];
+      if (!g) return;
+      window.__pagAtual = Object.assign({key}, g);
+      document.getElementById('fbCartao').textContent = g.cartao;
+      document.getElementById('fbInfo').textContent = `Vencimento ${g.venc} · ${g.rows.length} parcela(s)`;
+      document.getElementById('fbMoeda').textContent = g.moeda;
+      document.getElementById('fbValor').value = g.total.toFixed(2).replace('.', ',');
+      document.getElementById('fbData').value = new Date().toISOString().slice(0,10);
+      document.getElementById('fbObs').value = '';
+      document.getElementById('faturaBaixaModal').style.display = 'flex';
+    }
+
+    function fecharDarBaixaFatura() {
+      document.getElementById('faturaBaixaModal').style.display = 'none';
+      window.__pagAtual = null;
+    }
+
+    async function confirmarBaixaFatura() {
+      const g = window.__pagAtual;
+      if (!g) return;
+      const btn = document.getElementById('fbConfirmBtn');
+      btn.disabled = true;
+      btn.textContent = 'Processando...';
+      try {
+        const token = await garantirToken();
+        const dataInput = document.getElementById('fbData').value;
+        const [y,m,d] = dataInput.split('-');
+        const dataBR = `${d}/${m}/${y}`;
+        const obs = document.getElementById('fbObs').value || '';
+        const data = [];
+        g.rows.forEach(r => {
+          data.push({ range: `despesas!Q${r.sheetRow}`, values: [['Paga']] });
+          data.push({ range: `despesas!T${r.sheetRow}`, values: [[dataBR]] });
+          if (obs) data.push({ range: `despesas!S${r.sheetRow}`, values: [[obs]] });
+        });
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${Q21_SSID}/values:batchUpdate`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ valueInputOption: 'RAW', data })
+        });
+        if (!res.ok) throw new Error('Falha ao gravar: ' + res.status);
+        toast('Fatura quitada: ' + g.rows.length + ' parcela(s) marcadas como paga.', 'green');
+        fecharDarBaixaFatura();
+        loadFaturasPagar();
+      } catch (e) {
+        toast('Erro: ' + (e.message||e), 'red');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar baixa';
+      }
+    }
+
 
 // ── TOAST ──────────────────────────────────────────
 function toast(msg, type='green') {
