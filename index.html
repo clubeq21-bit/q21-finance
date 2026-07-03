@@ -1063,33 +1063,36 @@ async function loadBriefing() {
   const apiKey = getApiKey();
   if (!apiKey) { toast('Configure a API Key nas configurações ⚙', 'red'); toggleSettings(); return; }
 
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
+
   const btn = document.getElementById('briefingBtn');
   btn.classList.add('loading');
 
-  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
-  let sheetsData = '';
-
-  // Tenta buscar dados do Sheets se tiver token ativo
-  if (googleAccessToken && shCfg.id) {
-    try {
-      const token = googleAccessToken;
-      const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
-      const headers = { Authorization: 'Bearer ' + token };
-      const [recR, despR, transR] = await Promise.all([
-        fetch(`${baseUrl}/recebiveis!A1:R50`, { headers }),
-        fetch(`${baseUrl}/despesas!A1:V50`, { headers }),
-        fetch(`${baseUrl}/transacoes!A1:P30`, { headers })
-      ]);
-      const [rec, desp, trans] = await Promise.all([recR.json(), despR.json(), transR.json()]);
-      sheetsData = `Dados da planilha (amostra):\nRecebiveis: ${JSON.stringify(rec.values?.slice(0,10))}\nDespesas futuras: ${JSON.stringify(desp.values?.slice(0,10))}\nTransacoes recentes: ${JSON.stringify(trans.values?.slice(0,10))}`;
-    } catch(e) { 
-      console.warn('Sheets error in briefing:', e);
-      sheetsData = ''; 
-    }
+  let resumo = null;
+  try {
+    resumo = await computeFinanceSummary();
+  } catch (e) {
+    console.error('Erro ao calcular resumo financeiro real:', e);
   }
 
-  const hoje = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
-  const temDados = sheetsData.length > 50;
+  if (!resumo) {
+    toast('Erro ao ler a planilha — verifique a conexão com o Google Sheets', 'red');
+    renderBriefingFallback();
+    btn.classList.remove('loading');
+    return;
+  }
+
+  const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dadosReais = `Dados reais calculados a partir da planilha inteira, mês ${resumo.mesAtual}:
+- Receitas recebidas (BRL): ${fmt(resumo.recBRL)}${resumo.recEUR > 0 ? ` + €${resumo.recEUR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}${resumo.recUSD > 0 ? ` + $${resumo.recUSD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
+- Despesas do mês: ${fmt(resumo.totalDespesas)}
+- Saldo do mês: ${fmt(resumo.saldo)} (${resumo.saldo >= 0 ? 'positivo' : 'negativo'})
+- Parcelas previstas nos próximos 30 dias: ${fmt(resumo.totalFuturo)}
+- Inadimplência total (parcelas vencidas): ${fmt(resumo.totalInadimplencia)} em ${resumo.qtdInadimplentes} parcela(s)
+- Transações sem categoria: ${resumo.semCategoria}
+- Total de transações na planilha: ${resumo.qtdTransacoes}`;
+
   const prompt = `Você é o copiloto financeiro do Glendon Miranda, empreendedor brasileiro com negócios em Brasil, Europa e EUA.
 
 Estrutura financeira:
@@ -1103,17 +1106,16 @@ Regras: viagem para evento = PJ_BR, compra pessoal em viagem = PF_BR.
 
 Hoje é ${hoje}.
 
-${temDados ? sheetsData : 'Sem dados da planilha disponíveis agora — gere alertas e insights baseados no contexto do negócio.'}
+${dadosReais}
 
-Gere um briefing diário CONCISO e ÚTIL em português. Formato JSON:
+Estes números já são reais e definitivos — NÃO os recalcule nem invente outros valores. Gere um briefing diário CONCISO e ÚTIL em português, usando exatamente estes dados para embasar os alertas e o insight. Formato JSON:
 {
-  "saude": {"receitas": "R$ X", "despesas": "R$ X", "saldo": "R$ X", "status": "positivo|atencao|critico"},
   "alertas": [{"texto": "...", "tipo": "urgente|info|ok", "acao": "..."}],
-  "inteligencia": "Uma frase de insight financeiro personalizado para hoje",
-  "acoes": [{"texto": "X itens sem categoria em transacoes", "tipo": "revisao"}]
+  "inteligencia": "Uma frase de insight financeiro personalizado para hoje, baseada nos dados reais acima",
+  "acoes": [{"texto": "...", "tipo": "revisao"}]
 }
 
-Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no contexto.`;
+Seja específico: cite a inadimplência, parcelas futuras e itens sem categoria quando relevante.`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1131,6 +1133,13 @@ Seja específico e útil. Se não tiver dados reais, use estimativas baseadas no
     const clean = raw.replace(/```json|```/g, '').trim();
     const first = clean.indexOf('{'); const last = clean.lastIndexOf('}');
     const briefing = JSON.parse(clean.slice(first, last + 1));
+    // saúde financeira sempre vem dos dados reais, nunca do texto gerado pela IA
+    briefing.saude = {
+      receitas: fmt(resumo.recBRL) + (resumo.recEUR > 0 ? ` + €${resumo.recEUR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '') + (resumo.recUSD > 0 ? ` + $${resumo.recUSD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''),
+      despesas: fmt(resumo.totalDespesas),
+      saldo: fmt(resumo.saldo),
+      status: resumo.saldo > 0 ? 'positivo' : (resumo.saldo === 0 ? 'atencao' : 'critico')
+    };
     renderBriefing(briefing);
   } catch(e) {
     console.error('Briefing API error:', e);
@@ -1904,6 +1913,108 @@ function parseCurrencyValue(v) {
   return isNaN(n) ? 0 : n;
 }
 
+// ── SHARED DATE/FORMAT HELPERS ──────────────────────────────────────────
+function parseBRDate(s) {
+  if (!s) return null;
+  if (s instanceof Date) return s;
+  const str = String(s).trim();
+  if (str.includes('/')) {
+    const p = str.split('/');
+    if (p.length === 3) {
+      const y = p[2].length === 2 ? '20' + p[2] : p[2];
+      return new Date(parseInt(y), parseInt(p[1]) - 1, parseInt(p[0]));
+    }
+  } else if (str.includes('-')) {
+    return new Date(str);
+  }
+  return null;
+}
+
+function getMesAno(s) {
+  if (!s) return '';
+  const str = String(s).trim();
+  if (str.includes('/')) {
+    const p = str.split('/');
+    if (p.length === 3) {
+      const y = p[2].length === 2 ? '20' + p[2] : p[2];
+      return y + '/' + p[1].padStart(2, '0');
+    }
+  } else if (str.includes('-') && str.length >= 7) {
+    return str.slice(0, 4) + '/' + str.slice(5, 7);
+  }
+  return '';
+}
+
+function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+// ── FINANCE SUMMARY (dados reais, calculados a partir da planilha inteira) ──
+async function computeFinanceSummary() {
+  const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+  if (!shCfg.id) return null;
+
+  const token = await garantirToken();
+  const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
+  const hdrs = { Authorization: 'Bearer ' + token };
+
+  const [transR, despR, recR] = await Promise.all([
+    fetch(`${baseUrl}/transacoes!A1:P2000`, { headers: hdrs }),
+    fetch(`${baseUrl}/despesas!A1:V500`, { headers: hdrs }),
+    fetch(`${baseUrl}/recebiveis!A1:R500`, { headers: hdrs })
+  ]);
+  const [transJson, despJson, recJson] = await Promise.all([transR.json(), despR.json(), recR.json()]);
+
+  const transRows = transJson.values || [];
+  const despRows  = despJson.values  || [];
+  const recRows   = recJson.values   || [];
+
+  const tH = transRows[0] || [];
+  const dH = despRows[0]  || [];
+  const rH = recRows[0]   || [];
+
+  const tIdx = { data: tH.indexOf('Data'), valor: tH.indexOf('Valor'), tipo: tH.indexOf('Tipo'), cat: tH.indexOf('Categoria'), ent: tH.indexOf('Entidade') };
+  const dIdx = { desc: dH.indexOf('Descricao'), valor: dH.indexOf('Valor_Parcela'), venc: dH.indexOf('Vencimento'), status: dH.indexOf('Status') };
+  const rIdx = { valor: rH.indexOf('Valor_Parcela'), moeda: rH.indexOf('Moeda'), venc: rH.indexOf('Vencimento') !== -1 ? rH.indexOf('Vencimento') : 9, status: rH.indexOf('Status_Parcela'), cliente: rH.indexOf('Cliente') };
+
+  const hoje = new Date();
+  const em30 = new Date(hoje); em30.setDate(hoje.getDate() + 30);
+  const mesAtual = `${hoje.getFullYear()}/${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  const matchMes = (dateStr) => getMesAno(dateStr) === mesAtual;
+
+  const recPagas = recRows.slice(1).filter(r => String(r[rIdx.status] || '').trim() === 'Paga' && matchMes(r[rIdx.venc]));
+  const recBRL = recPagas.filter(r => !['EUR', 'USD'].includes(String(r[rIdx.moeda] || '').toUpperCase())).reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+  const recEUR = recPagas.filter(r => String(r[rIdx.moeda] || '').toUpperCase() === 'EUR').reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+  const recUSD = recPagas.filter(r => String(r[rIdx.moeda] || '').toUpperCase() === 'USD').reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+
+  const TIPOS_EXCL = ['PAGAMENTO_CARTAO', 'PAGAMENTO_FATURA', 'RECEITA', 'TRANSFERENCIA'];
+  const despPagas = transRows.slice(1).filter(r => {
+    const valor = parseCurrencyValue(r[tIdx.valor]);
+    if (valor >= 0) return false;
+    if (!matchMes(r[tIdx.data])) return false;
+    const tipo = String(r[tIdx.tipo] || '').toUpperCase().trim();
+    return !TIPOS_EXCL.includes(tipo);
+  });
+  const totalDespesas = despPagas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+  const saldo = recBRL - totalDespesas;
+
+  const parcFuturas = despRows.slice(1).filter(r => {
+    const status = String(r[dIdx.status] || '').trim();
+    const venc = parseBRDate(r[dIdx.venc]);
+    return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
+  });
+  const totalFuturo = parcFuturas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[dIdx.valor])), 0);
+
+  const vencidas = recRows.slice(1).filter(r => String(r[rIdx.status] || '').trim() === 'Vencida');
+  const totalInadimplencia = vencidas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[rIdx.valor])), 0);
+
+  const semCategoria = transRows.slice(1).filter(r => !String(r[tIdx.cat] || '').trim()).length;
+
+  return {
+    mesAtual, recBRL, recEUR, recUSD, totalDespesas, saldo, totalFuturo,
+    totalInadimplencia, qtdInadimplentes: vencidas.length, semCategoria,
+    qtdTransacoes: transRows.length - 1
+  };
+}
+
 async function loadDashboard() {
   const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
   if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
@@ -1959,40 +2070,6 @@ async function loadDashboard() {
       ent:     rH.indexOf('Entidade'),
       prod:    rH.indexOf('Produto')
     };
-
-    // ── HELPER FUNCTIONS ──
-    function parseBRDate(s) {
-      if (!s) return null;
-      if (s instanceof Date) return s;
-      const str = String(s).trim();
-      if (str.includes('/')) {
-        const p = str.split('/');
-        if (p.length === 3) {
-          const y = p[2].length === 2 ? '20' + p[2] : p[2];
-          return new Date(parseInt(y), parseInt(p[1]) - 1, parseInt(p[0]));
-        }
-      } else if (str.includes('-')) {
-        return new Date(str);
-      }
-      return null;
-    }
-
-    function getMesAno(s) {
-      if (!s) return '';
-      const str = String(s).trim();
-      if (str.includes('/')) {
-        const p = str.split('/');
-        if (p.length === 3) {
-          const y = p[2].length === 2 ? '20' + p[2] : p[2];
-          return y + '/' + p[1].padStart(2, '0');
-        }
-      } else if (str.includes('-') && str.length >= 7) {
-        return str.slice(0, 4) + '/' + str.slice(5, 7);
-      }
-      return '';
-    }
-
-    function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
     // ── POPULATE MONTH SELECTOR ──
     const meses = new Set();
