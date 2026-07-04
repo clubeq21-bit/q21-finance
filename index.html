@@ -1241,6 +1241,8 @@ async function analisarPlanilha() {
     const projIdx = transHeaders.indexOf('Projeto');
     const descIdx = transHeaders.indexOf('Descricao_Extrato');
     const idIdx   = transHeaders.indexOf('ID_Transacao');
+    const valorIdx = transHeaders.indexOf('Valor');
+    const dataIdx  = transHeaders.indexOf('Data');
 
     const semCategoria = transRows.slice(1).filter(r => (!r[catIdx] || !r[subIdx]) && r[descIdx]);
     const semEntidade  = transRows.slice(1).filter(r => !r[entIdx] && r[descIdx]);
@@ -1253,6 +1255,8 @@ async function analisarPlanilha() {
     const despIdIdx   = despHeaders.indexOf('ID_Despesa');
     const despEntIdx  = despHeaders.indexOf('Entidade');
     const despProjIdx = despHeaders.indexOf('Projeto');
+    const despValorIdx = despHeaders.indexOf('Valor_Parcela');
+    const despVencIdx  = despHeaders.indexOf('Vencimento');
     const semDespCat  = despRows.slice(1).filter(r => (!r[despCatIdx] || !r[despSubIdx]) && r[despDescIdx]);
 
     // Projetos — transações e despesas sem projeto ou com nome inconsistente
@@ -1267,7 +1271,7 @@ async function analisarPlanilha() {
       return p && !PROJETOS_VALIDOS.includes(p) && r[descIdx];
     });
     const semProjCount = semTransProj.length + semDespProj.length + projInconsistentes.length;
-    window._projData = { transRows, despRows, transHeaders, despHeaders, transProj, despProj, idIdx, descIdx, despDescIdx, despIdIdx, semTransProj, semDespProj, projInconsistentes };
+    window._projData = { transRows, despRows, transHeaders, despHeaders, transProj, despProj, idIdx, descIdx, despDescIdx, despIdIdx, semTransProj, semDespProj, projInconsistentes, valorIdx, dataIdx, despValorIdx, despVencIdx };
     
     // Store for later use in showIssue
     window._despRows = despRows;
@@ -1310,6 +1314,12 @@ async function analisarPlanilha() {
       const descCol = sheetType === 'despesas' ? pd.despDescIdx : pd.descIdx;
       const entCol = sheetType === 'despesas' ? pd.despHeaders.indexOf('Entidade') : pd.transHeaders.indexOf('Entidade');
       const catCol = sheetType === 'despesas' ? pd.despHeaders.indexOf('Categoria') : pd.transHeaders.indexOf('Categoria');
+      const valorCol = sheetType === 'despesas' ? pd.despValorIdx : pd.valorIdx;
+      const dataCol = sheetType === 'despesas' ? pd.despVencIdx : pd.dataIdx;
+
+      // Mapa id → {valor, data} para exibir no card de revisão (não vai pro prompt, só pra UI)
+      const infoById = {};
+      lote.forEach(r => { infoById[r[idCol]] = { valor: r[valorCol], data: r[dataCol] }; });
 
       for (let i = 0; i < lote.length; i += BATCH) {
         const batch = lote.slice(i, i + BATCH);
@@ -1361,7 +1371,7 @@ JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"
           const raw = d.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
           const clean = raw.replace(/\`\`\`json|\`\`\`/g, '').trim();
           const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
-          allS.push(...(parsed.sugestoes || []).map(s => ({ ...s, _sheet: sheetType })));
+          allS.push(...(parsed.sugestoes || []).map(s => ({ ...s, _sheet: sheetType, ...(infoById[s.id] || {}) })));
         } catch(e) { console.warn('batch err', e); }
         
         if (i + BATCH < lote.length) await new Promise(r => setTimeout(r, 500));
@@ -1380,7 +1390,7 @@ JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"
         <div class="suggestion-card ${s.aprovado !== false ? 'approved' : 'rejected'}" id="sc-${i}">
           <div class="s-check ${s.aprovado !== false ? 'checked' : ''}" onclick="toggleSugestao(${i})">${s.aprovado !== false ? '✓' : ''}</div>
           <div class="s-info">
-            <div class="s-desc">${s.desc || s.id}</div>
+            <div class="s-desc">${s.desc || s.id}${s.valor ? ` — <b>${fmt(Math.abs(parseFloat(String(s.valor).replace(',','.'))||0))}</b>` : ''}${s.data ? ` · ${s.data}` : ''}</div>
             <div class="s-meta" style="align-items:center">
               <span class="s-tag">${s.id}</span>
               ${s.proj_atual ? `<span class="s-tag was">${s.proj_atual}</span>` : ''}
