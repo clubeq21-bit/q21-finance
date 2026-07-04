@@ -1371,7 +1371,8 @@ JSON puro: {"sugestoes":[{"id":"...","desc":"...","projeto":"Pessoal","motivo":"
           const raw = d.content?.find(b => b.type === 'text')?.text || '{"sugestoes":[]}';
           const clean = raw.replace(/\`\`\`json|\`\`\`/g, '').trim();
           const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
-          allS.push(...(parsed.sugestoes || []).map(s => ({ ...s, _sheet: sheetType, ...(infoById[s.id] || {}) })));
+          const rowsRef = sheetType === 'despesas' ? pd.despRows : pd.transRows;
+          allS.push(...(parsed.sugestoes || []).map(s => ({ ...s, _sheet: sheetType, aprovado: true, rowData: rowsRef.find(r => r[idCol] === s.id), ...(infoById[s.id] || {}) })));
         } catch(e) { console.warn('batch err', e); }
         
         if (i + BATCH < lote.length) await new Promise(r => setTimeout(r, 500));
