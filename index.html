@@ -471,7 +471,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
               <div><label>Nome visual</label><input type="text" id="fc-nome" placeholder="ex: Nubank"></div>
             </div>
             <div class="grid-3" style="margin-bottom:10px">
-              <div><label>Entidade</label><select id="fc-entidade"><option value="PF_BR">PF_BR</option><option value="PJ_BR">PJ_BR</option><option value="PF_EU">PF_EU</option><option value="LLC_US">LLC_US</option><option value="PJ_BR2">PJ_BR2</option></select></div>
+              <div><label>Entidade</label><select id="fc-entidade"></select></div>
               <div><label>Moeda</label><select id="fc-moeda"><option value="BRL">BRL</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
               <div><label>Banco</label><input type="text" id="fc-banco" placeholder="ex: Itaú"></div>
             </div>
@@ -1739,14 +1739,31 @@ let editingCartaoIdx = -1;
 const COLS_TRANS = ['ID_Transacao','Data','Descricao_Extrato','Valor','Moeda','Conta','ID_Conta','Canal','Tipo','Categoria','Subcategoria','Projeto','Entidade','Status','Observacoes','ID_Despesa_Link'];
 const COLS_PARC  = ['Descricao_Base','Valor_Parcela','Qtd_Total','Parcela_Atual','Data_Compra','Data_Base_Ciclo','Valor_Total','Parcelas_Restantes','Proxima_Parcela','Conta','ID_Conta','Projeto','Entidade','Status'];
 
+// Fonte da verdade: aba `estrutura_entidades` da planilha Controle Financeiro Q21 Hub.
+// Atualizar aqui manualmente quando a aba mudar (ver finance-hub.md no cofre).
+const ENTIDADES = ['PF_BR', 'PJ_BR', 'PJ_BR2', 'PJ_BR3', 'LLC_US', 'Q21_EUR'];
+
+function popularSelectEntidades(selectId, selected) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = ENTIDADES.map(e => `<option value="${e}">${e}</option>`).join('');
+  if (selected) sel.value = selected;
+}
+
 const CARTOES_DEFAULT = [
   { id:'SMILES_CARD', nome:'Smiles', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:6, venc:18 },
   { id:'ITAU_CARD',   nome:'Azul Infinity', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:23, venc:1 },
   { id:'ELO_CARD',    nome:'Elo Black', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:10, venc:20 },
   { id:'VISA_INFINTY_BLACK', nome:'Visa Infinite', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:18, venc:28 },
+  { id:'NUBANK_CARD', nome:'Nubank', banco:'Nubank', entidade:'PJ_BR3', moeda:'BRL', fech:11, venc:18 },
 ];
 
-function getCartoes() { const s = localStorage.getItem('q21_cartoes'); return s ? JSON.parse(s) : CARTOES_DEFAULT; }
+function getCartoes() {
+  const s = localStorage.getItem('q21_cartoes');
+  if (!s) return CARTOES_DEFAULT;
+  const salvos = JSON.parse(s);
+  const faltantes = CARTOES_DEFAULT.filter(d => !salvos.find(c => c.id === d.id));
+  return faltantes.length ? salvos.concat(faltantes) : salvos;
+}
 function saveCartoes(c) { localStorage.setItem('q21_cartoes', JSON.stringify(c)); }
 
 function renderCartoesLista() {
@@ -1765,8 +1782,8 @@ function abrirFormCartao(idx) {
   editingCartaoIdx = idx;
   document.getElementById('formCartao').style.display = 'block';
   document.getElementById('formCartaoTitle').textContent = idx === -1 ? 'Novo cartão' : 'Editar cartão';
-  if (idx >= 0) { const c = getCartoes()[idx]; document.getElementById('fc-id').value = c.id; document.getElementById('fc-id').readOnly = true; document.getElementById('fc-nome').value = c.nome; document.getElementById('fc-entidade').value = c.entidade; document.getElementById('fc-moeda').value = c.moeda; document.getElementById('fc-fech').value = c.fech; document.getElementById('fc-venc').value = c.venc; document.getElementById('fc-banco').value = c.banco||''; }
-  else { document.getElementById('fc-id').value=''; document.getElementById('fc-id').readOnly=false; document.getElementById('fc-nome').value=''; document.getElementById('fc-fech').value='6'; document.getElementById('fc-venc').value='18'; document.getElementById('fc-banco').value=''; }
+  if (idx >= 0) { const c = getCartoes()[idx]; document.getElementById('fc-id').value = c.id; document.getElementById('fc-id').readOnly = true; document.getElementById('fc-nome').value = c.nome; popularSelectEntidades('fc-entidade', c.entidade); document.getElementById('fc-moeda').value = c.moeda; document.getElementById('fc-fech').value = c.fech; document.getElementById('fc-venc').value = c.venc; document.getElementById('fc-banco').value = c.banco||''; }
+  else { document.getElementById('fc-id').value=''; document.getElementById('fc-id').readOnly=false; document.getElementById('fc-nome').value=''; popularSelectEntidades('fc-entidade'); document.getElementById('fc-fech').value='6'; document.getElementById('fc-venc').value='18'; document.getElementById('fc-banco').value=''; }
 }
 function fecharFormCartao() { document.getElementById('formCartao').style.display='none'; editingCartaoIdx=-1; }
 function salvarCartao() {
