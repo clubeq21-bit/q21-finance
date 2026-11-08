@@ -1917,9 +1917,10 @@ async function processarComClaude() {
       const aaFull = c2.mes.slice(0,4);
       const dataFull = partes.length===2 ? partes[0]+'/'+partes[1]+'/'+aaFull : '01/01/'+aaFull;
       const ehEntrada = c2.tipoConta==='conta' ? (isCred||sinalPositivo) : isCred;
-      const tipoFinal = isTransf ? 'transf' : (ehEntrada?'cred':isParc?'parc':'avista');
+      const ehRestituivel = /restitu/i.test(cat);
+      const tipoFinal = (isTransf||ehRestituivel) ? 'transf' : (ehEntrada?'cred':isParc?'parc':'avista');
       const pertenceContexto = !!(t.ctx||t.contexto);
-      txs.push({ id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(), data:dataFull, dataDisplay:data2, desc, valor:isTransf?valor:(ehEntrada?Math.abs(valor):-Math.abs(valor)), moeda:c2.moeda, conta:c2.contaNome, idConta:c2.conta, canal, tipo:tipoFinal, categoria:isTransf?'Transferências internas':cat, subcategoria:isTransf?'Aplicação/resgate automático':sub, projeto:pertenceContexto?c2.projetoContexto:'', parcAtual:pa, parcTotal:pt, entidade:c2.entidade, status:'Classificada', isDup, include:!isDup });
+      txs.push({ id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(), data:dataFull, dataDisplay:data2, desc, valor:(isTransf||ehRestituivel)?valor:(ehEntrada?Math.abs(valor):-Math.abs(valor)), moeda:c2.moeda, conta:c2.contaNome, idConta:c2.conta, canal, tipo:tipoFinal, categoria:isTransf?'Transferências internas':cat, subcategoria:isTransf?'Aplicação/resgate automático':sub, projeto:pertenceContexto?c2.projetoContexto:'', parcAtual:pa, parcTotal:pt, entidade:c2.entidade, status:'Classificada', isDup, include:!isDup });
     }
     setProgress(100,'✓ '+txs.length+' transações extraídas');
     updateMetrics(); invGoTo(3); renderTable();
