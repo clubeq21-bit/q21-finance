@@ -1922,11 +1922,12 @@ async function processarComClaude() {
       const pertenceContexto = !!(t.ctx||t.contexto);
       txs.push({ id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(), data:dataFull, dataDisplay:data2, desc, valor:(isTransf||ehRestituivel)?valor:(ehEntrada?Math.abs(valor):-Math.abs(valor)), moeda:c2.moeda, conta:c2.contaNome, idConta:c2.conta, canal, tipo:tipoFinal, categoria:isTransf?'Transferências internas':cat, subcategoria:isTransf?'Aplicação/resgate automático':sub, projeto:pertenceContexto?c2.projetoContexto:'', parcAtual:pa, parcTotal:pt, entidade:c2.entidade, status:'Classificada', isDup, include:!isDup });
     }
-    // Remove pares "Pagto cartão" + "Estorno de Débito" do mesmo dia/valor — pagamento que falhou e voltou, não é movimento real.
+    // Remove pares "Pagto cartão" + "Estorno de Débito" do mesmo valor (até 2 dias de diferença) — pagamento que falhou e voltou, não é movimento real.
+    const parseDataBR = s => { const [d,m,a] = (s||'').split('/').map(Number); return new Date(a, (m||1)-1, d||1).getTime(); };
     const removerIdx = new Set();
     txs.forEach((a, i) => {
       if (removerIdx.has(i) || !/^pagto cart/i.test(a.desc) || a.valor >= 0) return;
-      const j = txs.findIndex((b, jx) => jx!==i && !removerIdx.has(jx) && /^estorno de d[eé]bito/i.test(b.desc) && b.data===a.data && Math.abs(Math.abs(b.valor)-Math.abs(a.valor))<0.01);
+      const j = txs.findIndex((b, jx) => jx!==i && !removerIdx.has(jx) && /^estorno de d[eé]bito/i.test(b.desc) && Math.abs(parseDataBR(b.data)-parseDataBR(a.data)) <= 2*86400000 && Math.abs(Math.abs(b.valor)-Math.abs(a.valor))<0.01);
       if (j !== -1) { removerIdx.add(i); removerIdx.add(j); }
     });
     if (removerIdx.size) txs = txs.filter((_, i) => !removerIdx.has(i));
