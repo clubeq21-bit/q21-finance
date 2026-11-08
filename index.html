@@ -421,6 +421,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
       <button class="nav-btn" onclick="showPage('dashboard'); loadDashboard()" id="nav-dashboard">Dashboard</button>
       <button class="nav-btn" onclick="showPage('recebimentos'); loadRecebimentos()" id="nav-recebimentos">Recebimentos</button>
         <button class="nav-btn" id="nav-pagamentos" onclick="showPage('pagamentos'); loadFaturasPagar()">💳 Pagamentos</button>
+        <button class="nav-btn" id="nav-contas" onclick="showPage('contas'); loadContasGrid()">🗓 Contas</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
       <div class="nav-btn" id="apiStatusBadge"><div class="dot" id="apiDot"></div><span id="apiStatusText">sem API</span></div>
       <div class="nav-btn" id="sheetsStatusBadge"><div class="dot" id="sheetsDot"></div><span id="sheetsStatusText">sem Sheets</span></div>
@@ -706,6 +707,19 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
           </div>
           <div id="pagSummary" class="rec-kpi-wrap"></div>
           <div id="pagList"></div>
+        </div>
+      </div>
+
+      <div class="page" id="page-contas">
+        <div class="page-inner">
+          <div class="page-header">
+            <div>
+              <div class="page-title">🗓 Contas — extratos importados</div>
+              <div class="page-sub">Cartão/conta × mês. Mostra o que já subiu, pra nunca mais perder o controle.</div>
+            </div>
+            <button class="btn" onclick="loadContasGrid()">Atualizar</button>
+          </div>
+          <div id="contasGridWrap"></div>
         </div>
       </div>
 
@@ -1750,11 +1764,17 @@ function popularSelectEntidades(selectId, selected) {
 }
 
 const CARTOES_DEFAULT = [
-  { id:'SMILES_CARD', nome:'Smiles', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:6, venc:18 },
-  { id:'ITAU_CARD',   nome:'Azul Infinity', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:23, venc:1 },
-  { id:'ELO_CARD',    nome:'Elo Black', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:10, venc:20 },
-  { id:'VISA_INFINTY_BLACK', nome:'Visa Infinite', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:18, venc:28 },
-  { id:'NUBANK_CARD', nome:'Nubank', banco:'Nubank', entidade:'PJ_BR3', moeda:'BRL', fech:11, venc:18 },
+  { id:'SMILES_CARD', nome:'Smiles', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:6, venc:18, tipo:'cartao' },
+  { id:'ITAU_CARD',   nome:'Azul Infinity', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:23, venc:1, tipo:'cartao' },
+  { id:'ELO_CARD',    nome:'Elo Black', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:10, venc:20, tipo:'cartao' },
+  { id:'VISA_INFINTY_BLACK', nome:'Visa Infinite', banco:'Itaú', entidade:'PF_BR', moeda:'BRL', fech:18, venc:28, tipo:'cartao' },
+  { id:'NUBANK_CARD', nome:'Nubank', banco:'Nubank', entidade:'PJ_BR3', moeda:'BRL', fech:11, venc:18, tipo:'cartao' },
+];
+
+// Contas corrente/gateway (sem ciclo de fatura) — mesma fonte da aba contas_meios.
+const CONTAS_BANCARIAS = [
+  { id:'BB_PF', nome:'Banco do Brasil', banco:'Banco do Brasil', entidade:'PF_BR', moeda:'BRL', fech:null, venc:null, tipo:'conta' },
+  { id:'ASAAS_PJ', nome:'Asaas', banco:'Asaas', entidade:'PJ_BR', moeda:'BRL', fech:null, venc:null, tipo:'conta' },
 ];
 
 function getCartoes() {
@@ -1764,6 +1784,8 @@ function getCartoes() {
   const faltantes = CARTOES_DEFAULT.filter(d => !salvos.find(c => c.id === d.id));
   return faltantes.length ? salvos.concat(faltantes) : salvos;
 }
+
+function getContasImportaveis() { return getCartoes().concat(CONTAS_BANCARIAS); }
 function saveCartoes(c) { localStorage.setItem('q21_cartoes', JSON.stringify(c)); }
 
 function renderCartoesLista() {
@@ -1773,7 +1795,8 @@ function renderCartoesLista() {
   if (!cartoes.length) { lista.innerHTML = '<div style="font-size:12px;color:var(--muted)">Nenhum cartão. Clique em "+ Novo cartão".</div>'; seletor.style.display = 'none'; return; }
   lista.innerHTML = cartoes.map((c, i) => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--surface2)"><div style="flex:1"><div style="font-size:13px;font-weight:500">${c.nome}</div><div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${c.id} · ${c.banco||''} · ${c.entidade} · ${c.moeda} · fecha dia ${c.fech} · vence dia ${c.venc}</div></div><button class="btn" style="font-size:11px;padding:4px 9px" onclick="abrirFormCartao(${i})">Editar</button><button class="del-btn" onclick="removerCartao(${i})">✕</button></div>`).join('');
   const sel = document.getElementById('cfg-conta');
-  sel.innerHTML = cartoes.map(c => `<option value="${c.id}">${c.id} — ${c.nome}</option>`).join('');
+  const contasImp = getContasImportaveis();
+  sel.innerHTML = contasImp.map(c => `<option value="${c.id}">${c.id} — ${c.nome}${c.tipo==='conta'?' (conta)':''}</option>`).join('');
   seletor.style.display = 'block';
   preencherCartaoSelecionado();
 }
@@ -1797,9 +1820,9 @@ function salvarCartao() {
   saveCartoes(cartoes); fecharFormCartao(); renderCartoesLista(); toast('Cartão salvo: ' + nome, 'green');
 }
 function removerCartao(idx) { const c = getCartoes(); const n = c[idx].nome; c.splice(idx,1); saveCartoes(c); renderCartoesLista(); toast('Removido: ' + n); }
-function preencherCartaoSelecionado() { const id = document.getElementById('cfg-conta').value; const c = getCartoes().find(x => x.id===id); if (!c) return; document.getElementById('cfg-conta-nome').value = c.nome; document.getElementById('cfg-entidade').value = c.entidade; document.getElementById('cfg-moeda').value = c.moeda; document.getElementById('cfg-fech').value = c.fech; document.getElementById('cfg-venc').value = c.venc; document.getElementById('cfg-ciclo').value = 'fecha dia '+c.fech+' · vence dia '+c.venc; }
+function preencherCartaoSelecionado() { const id = document.getElementById('cfg-conta').value; const c = getContasImportaveis().find(x => x.id===id); if (!c) return; document.getElementById('cfg-conta-nome').value = c.nome; document.getElementById('cfg-entidade').value = c.entidade; document.getElementById('cfg-moeda').value = c.moeda; document.getElementById('cfg-fech').value = c.fech||''; document.getElementById('cfg-venc').value = c.venc||''; document.getElementById('cfg-ciclo').value = c.tipo==='conta' ? 'conta corrente (sem ciclo de fatura)' : 'fecha dia '+c.fech+' · vence dia '+c.venc; }
 
-function cfg() { return { conta: document.getElementById('cfg-conta').value, contaNome: document.getElementById('cfg-conta-nome').value, entidade: document.getElementById('cfg-entidade').value, moeda: document.getElementById('cfg-moeda').value, mes: document.getElementById('cfg-mes').value, fech: parseInt(document.getElementById('cfg-fech').value)||6, venc: parseInt(document.getElementById('cfg-venc').value)||18 }; }
+function cfg() { const id = document.getElementById('cfg-conta').value; const c = getContasImportaveis().find(x => x.id===id) || {}; return { conta: id, contaNome: document.getElementById('cfg-conta-nome').value, entidade: document.getElementById('cfg-entidade').value, moeda: document.getElementById('cfg-moeda').value, mes: document.getElementById('cfg-mes').value, fech: parseInt(document.getElementById('cfg-fech').value)||6, venc: parseInt(document.getElementById('cfg-venc').value)||18, tipoConta: c.tipo||'cartao' }; }
 
 function invGoTo(n) {
   for (let i=1;i<=4;i++) { document.getElementById('inv-s'+i).classList.toggle('hidden', i!==n); }
@@ -1824,7 +1847,10 @@ async function processarComClaude() {
     const isPJ = c.entidade.startsWith('PJ');
     const catsPF = `Alimentação: Em casa|Fora de casa\nSaúde: Plano de saúde|Medicamentos|Dentista|Exames e consultas\nPessoais: Higiene e Beleza|Vestuário e Acessórios|Academia e Saúde|Presentes\nResidenciais: Aluguel|Condomínio|Energia elétrica|Manutenção e reformas\nServiços: Água|Energia elétrica|Telefonia|Internet|Streaming\nViagens: Hospedagem|Combustível|Passagens|Alimentação\nVeículos: Combustível para locomoção|Manutenção|Estacionamento|Multas\nLazer: Cinema e locações|Eventos|Festas e diversão\nBancos e cartões: Anuidade|Juros - Cartão|Manutenção e tarifas`;
     const catsPJ = `Operacionais e Comerciais: Fornecedores|Material de escritório|Contador|Marketing e Propaganda|Sistema\nServiços: Energia elétrica|Telefonia e Internet\nViagens: Hospedagem|Passagens|Combustível|Alimentação\nPessoal: Funcionários Fixos|Pró-labore\nVeículos: Abastecimento|Manutenção e conservação`;
-    const systemPrompt = `Extraia transações de fatura de cartão de crédito. Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.\nExclua: saldo anterior, pagamentos de fatura, resumo.\nFormato: {"t":[{"d":"DD/MM","n":"descrição exata do extrato","v":123.45,"tp":"a","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}\ntp: a=à vista, p=parcelada, cr=crédito, pf=EXCLUIR\nPara parceladas: extraia pa e pt. Ex: PARC 03/12 → pa:3,pt:12\nIMPORTANTE: campo n = descrição EXATA do extrato sem modificar.\nIMPORTANTE: no campo n das parceladas, copie exatamente como está no extrato.\nClassifique com estas categorias:\n${isPJ ? catsPJ : catsPF}`;
+    const isConta = c.tipoConta === 'conta';
+    const systemPrompt = isConta
+      ? `Extraia transações de extrato de conta bancária/gateway (Pix, TED, boleto, débito, depósito). Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.\nExclua: saldo anterior, saldo final, resumo.\nFormato: {"t":[{"d":"DD/MM","n":"descrição exata do extrato","v":123.45,"tp":"a","ca":"Pix","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}\ntp: a=entrada ou saída normal, cr=crédito/estorno, pf=EXCLUIR (nunca usar p/parcelada aqui)\nca = canal real do movimento: Pix, TED, Boleto, Debito ou Deposito.\nValor negativo = saída (despesa/transferência), positivo = entrada (receita). Use o sinal exatamente como no extrato.\nIMPORTANTE: campo n = descrição EXATA do extrato sem modificar.\nClassifique com estas categorias:\n${isPJ ? catsPJ : catsPF}`
+      : `Extraia transações de fatura de cartão de crédito. Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.\nExclua: saldo anterior, pagamentos de fatura, resumo.\nFormato: {"t":[{"d":"DD/MM","n":"descrição exata do extrato","v":123.45,"tp":"a","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}\ntp: a=à vista, p=parcelada, cr=crédito, pf=EXCLUIR\nPara parceladas: extraia pa e pt. Ex: PARC 03/12 → pa:3,pt:12\nIMPORTANTE: campo n = descrição EXATA do extrato sem modificar.\nIMPORTANTE: no campo n das parceladas, copie exatamente como está no extrato.\nClassifique com estas categorias:\n${isPJ ? catsPJ : catsPF}`;
     let messages;
     if (pdfBase64) messages = [{ role:'user', content: [{ type:'document', source:{type:'base64',media_type:'application/pdf',data:pdfBase64} }, { type:'text', text:'Extraia todas as transações desta fatura.' }] }];
     else messages = [{ role:'user', content:'Extraia as transações:\n\n'+texto }];
@@ -1846,12 +1872,15 @@ async function processarComClaude() {
       const cat = t.cat||t.c||t.categoria_sugerida||''; const sub = t.sub||t.subcategoria||'';
       const pa = parseInt(t.pa||t.parcela_atual||1); const pt = parseInt(t.pt||t.parcela_total||1);
       const isCred = tp==='cr'||tp==='credito'; const isParc = tp==='p'||tp==='parcelada';
+      const canal = t.ca||t.canal||(c2.tipoConta==='conta'?'Debito':'Cartao');
+      const sinalPositivo = (t.v||t.valor||0) > 0;
       const hash = [data2, desc.slice(0,15), valor.toFixed(2)].join('|');
       const isDup = dupeHash.has(hash); dupeHash.add(hash);
       const partes = data2.split('/');
       const aaFull = c2.mes.slice(0,4);
       const dataFull = partes.length===2 ? partes[0]+'/'+partes[1]+'/'+aaFull : '01/01/'+aaFull;
-      txs.push({ id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(), data:dataFull, dataDisplay:data2, desc, valor:isCred?Math.abs(valor):-Math.abs(valor), moeda:c2.moeda, conta:c2.contaNome, idConta:c2.conta, tipo:isCred?'cred':isParc?'parc':'avista', categoria:cat, subcategoria:sub, parcAtual:pa, parcTotal:pt, entidade:c2.entidade, status:'Classificada', isDup, include:!isDup });
+      const ehEntrada = c2.tipoConta==='conta' ? (isCred||sinalPositivo) : isCred;
+      txs.push({ id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(), data:dataFull, dataDisplay:data2, desc, valor:ehEntrada?Math.abs(valor):-Math.abs(valor), moeda:c2.moeda, conta:c2.contaNome, idConta:c2.conta, canal, tipo:ehEntrada?'cred':isParc?'parc':'avista', categoria:cat, subcategoria:sub, parcAtual:pa, parcTotal:pt, entidade:c2.entidade, status:'Classificada', isDup, include:!isDup });
     }
     setProgress(100,'✓ '+txs.length+' transações extraídas');
     updateMetrics(); invGoTo(3); renderTable();
@@ -1879,7 +1908,7 @@ function renderTable() {
 
 function updateMetrics() { const inc=txs.filter(t=>t.include); document.getElementById('m-total').textContent=inc.length; document.getElementById('m-avista').textContent=inc.filter(t=>t.tipo==='avista').length; document.getElementById('m-parc').textContent=inc.filter(t=>t.tipo==='parc').length; document.getElementById('m-dup').textContent=txs.filter(t=>t.isDup).length; }
 
-function adicionarLinha() { const c=cfg(); txs.push({id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(),data:c.mes.replace('-','/')+'/01',dataDisplay:'01/'+c.mes.slice(5),desc:'Nova transação',valor:-0,moeda:c.moeda,conta:c.contaNome,idConta:c.conta,tipo:'avista',categoria:'',subcategoria:'',parcAtual:1,parcTotal:1,entidade:c.entidade,status:'Classificada',isDup:false,include:true}); renderTable(); updateMetrics(); }
+function adicionarLinha() { const c=cfg(); txs.push({id:'TX_'+Math.random().toString(36).slice(2,8).toUpperCase(),data:c.mes.replace('-','/')+'/01',dataDisplay:'01/'+c.mes.slice(5),desc:'Nova transação',valor:-0,moeda:c.moeda,conta:c.contaNome,idConta:c.conta,canal:c.tipoConta==='conta'?'Debito':'Cartao',tipo:'avista',categoria:'',subcategoria:'',parcAtual:1,parcTotal:1,entidade:c.entidade,status:'Classificada',isDup:false,include:true}); renderTable(); updateMetrics(); }
 
 function showOutTab(tab,el) { document.querySelectorAll('#inv-s4 .tabs .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); ['out-transacoes','out-parceladas','out-ciclo'].forEach(id=>document.getElementById(id).style.display='none'); document.getElementById('out-'+tab).style.display='block'; }
 
@@ -1887,7 +1916,7 @@ function buildOutputs() {
   const c=cfg(); const inc=txs.filter(t=>t.include);
   const avista=inc.filter(t=>t.tipo==='avista'||t.tipo==='cred');
   const parcs=inc.filter(t=>t.tipo==='parc');
-  const transRows=avista.map(t=>{const tipo=t.tipo==='cred'?'RECEITA':'CARTAO';const cat=t.tipo==='cred'?'Outras fontes':t.categoria;const sub=t.tipo==='cred'?'Crédito/Estorno':(t.subcategoria||'');return[t.id,t.data,t.desc,t.valor.toFixed(2),t.moeda,t.conta,t.idConta,'Cartao',tipo,cat,sub,'',t.entidade,'Classificada','',''].join('\t');});
+  const transRows=avista.map(t=>{const tipo=t.tipo==='cred'?'RECEITA':'CARTAO';const forcaEstorno=t.tipo==='cred'&&c.tipoConta!=='conta';const cat=forcaEstorno?'Outras fontes':t.categoria;const sub=forcaEstorno?'Crédito/Estorno':(t.subcategoria||'');return[t.id,t.data,t.desc,t.valor.toFixed(2),t.moeda,t.conta,t.idConta,t.canal,tipo,cat,sub,'',t.entidade,'Classificada','',''].join('\t');});
   document.getElementById('outTrans').textContent=transRows.join('\n');
   const parcRows=parcs.map(t=>{const restantes=t.parcTotal-t.parcAtual;const total=Math.abs(t.valor)*t.parcTotal;const dataCiclo=c.mes+'-'+String(c.fech).padStart(2,'0');const descBase=t.desc.replace(/\s*(tit-)?parc\s+\d+\/\d+/gi,'').replace(/\s+\d{1,2}\/\d{1,2}\s*$/g,'').replace(/\s{2,}/g,' ').trim();return[descBase,Math.abs(t.valor).toFixed(2),t.parcTotal,t.parcAtual,t.data,dataCiclo,total.toFixed(2),restantes,Math.min(t.parcAtual+1,t.parcTotal),t.conta,t.idConta,'',t.entidade,'Ativa'].join('\t');});
   document.getElementById('outParc').textContent=parcRows.join('\n');
@@ -1895,20 +1924,47 @@ function buildOutputs() {
   document.getElementById('outCiclo').textContent=['RESUMO DO CICLO','━'.repeat(40),`Cartão: ${c.contaNome} (${c.conta})`,`Fatura: ${c.mes}`,`Fechamento: dia ${c.fech} · Vencimento: dia ${c.venc}`,`Entidade: ${c.entidade}`,`Moeda: ${c.moeda}`,'','À vista: '+avista.length+' — R$ '+totalA.toLocaleString('pt-BR',{minimumFractionDigits:2}),'Parceladas: '+parcs.length+' — R$ '+totalP.toLocaleString('pt-BR',{minimumFractionDigits:2}),'Total: R$ '+(totalA+totalP).toLocaleString('pt-BR',{minimumFractionDigits:2}),'','PRÓXIMOS PASSOS','1. Cole transacoes na aba transacoes do Sheets','2. Cole controle_parceladas na aba controle_parceladas','3. Rode gerarParcelasFuturasDespesasPorCiclo()','4. Após pagar → processarPagamentosCartaoV2()'].join('\n');
 }
 
+// ── EXTRATOS_IMPORTADOS (rastreio conta × mês) ──────────────────────────────
+async function consultarExtratoImportado(shCfg, token, idConta, mes) {
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values/extratos_importados!A2:F500`, { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const rows = data.values || [];
+  const idx = rows.findIndex(row => row[0] === idConta && row[1] === mes);
+  return idx === -1 ? null : { linha: idx + 2, status: rows[idx][2] };
+}
+async function marcarExtratoImportado(shCfg, token, idConta, mes, qtd) {
+  const existente = await consultarExtratoImportado(shCfg, token, idConta, mes);
+  const agora = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const row = [idConta, mes, 'Importado', agora, qtd, ''];
+  const range = existente ? `extratos_importados!A${existente.linha}:F${existente.linha}` : 'extratos_importados!A1:F1';
+  const method = existente ? 'PUT' : 'POST';
+  const url = existente
+    ? `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values/${encodeURIComponent(range)}?valueInputOption=RAW`
+    : `https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values/extratos_importados!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+  await fetch(url, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [row] }) });
+}
+
 async function enviarParaSheets() {
   const cfgRaw=localStorage.getItem('q21_sheets_cfg'); if(!cfgRaw){toast('Configure o Sheets ⚙','red');toggleSettings();return;} const shCfg=JSON.parse(cfgRaw); if(!shCfg.id){toast('Cole o ID da planilha','red');toggleSettings();return;}
   const statusEl=document.getElementById('envioStatus'); statusEl.style.color='var(--muted)'; statusEl.textContent='⏳ Conectando...';
   try {
     const token=await garantirToken(); const inc=txs.filter(t=>t.include);
+    const cChk = cfg();
+    const jaFeito = await consultarExtratoImportado(shCfg, token, cChk.conta, cChk.mes);
+    if (jaFeito && (jaFeito.status === 'Importado' || jaFeito.status === 'Conferido')) {
+      if (!confirm(`${cChk.conta} · ${cChk.mes} já está marcado como "${jaFeito.status}". Importar de novo pode duplicar lançamentos. Continuar mesmo assim?`)) { statusEl.textContent=''; return; }
+    }
     const avista=inc.filter(t=>t.tipo==='avista'||t.tipo==='cred');
     const parcs=inc.filter(t=>t.tipo==='parc');
     const c=cfg();
-    const transRows=avista.map(t=>{const tipo=t.tipo==='cred'?'RECEITA':'CARTAO';const cat=t.tipo==='cred'?'Outras fontes':t.categoria;const sub=t.tipo==='cred'?'Crédito/Estorno':(t.subcategoria||'');return[t.id,t.data,t.desc,t.valor.toFixed(2),t.moeda,t.conta,t.idConta,'Cartao',tipo,cat,sub,'',t.entidade,'Classificada','',''];});
+    const transRows=avista.map(t=>{const tipo=t.tipo==='cred'?'RECEITA':'CARTAO';const forcaEstorno=t.tipo==='cred'&&c.tipoConta!=='conta';const cat=forcaEstorno?'Outras fontes':t.categoria;const sub=forcaEstorno?'Crédito/Estorno':(t.subcategoria||'');return[t.id,t.data,t.desc,t.valor.toFixed(2),t.moeda,t.conta,t.idConta,t.canal,tipo,cat,sub,'',t.entidade,'Classificada','',''];});
     const parcRows=parcs.map(t=>{const restantes=t.parcTotal-t.parcAtual;const total=Math.abs(t.valor)*t.parcTotal;const dataCiclo=c.mes+'-'+String(c.fech).padStart(2,'0');const descBase=t.desc.replace(/\s*(tit-)?parc\s+\d+\/\d+/gi,'').replace(/\s+\d{1,2}\/\d{1,2}\s*$/g,'').replace(/\s{2,}/g,' ').trim();return[descBase,Math.abs(t.valor).toFixed(2),t.parcTotal,t.parcAtual,t.data,dataCiclo,total.toFixed(2),restantes,Math.min(t.parcAtual+1,t.parcTotal),t.conta,t.idConta,'',t.entidade,'Ativa'];});
     const baseUrl=`https://sheets.googleapis.com/v4/spreadsheets/${shCfg.id}/values`;
     const headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
     if(transRows.length){statusEl.textContent=`⏳ Enviando ${transRows.length} transações...`;const r1=await fetch(`${baseUrl}/${encodeURIComponent(shCfg.trans)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers,body:JSON.stringify({values:transRows})});if(!r1.ok){const e=await r1.json();throw new Error(e.error?.message||r1.status);}}
     if(parcRows.length){statusEl.textContent=`⏳ Enviando ${parcRows.length} parceladas...`;const r2=await fetch(`${baseUrl}/${encodeURIComponent(shCfg.parc)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers,body:JSON.stringify({values:parcRows})});if(!r2.ok){const e=await r2.json();throw new Error(e.error?.message||r2.status);}}
+    await marcarExtratoImportado(shCfg, token, c.conta, c.mes, transRows.length + parcRows.length);
     statusEl.style.color='var(--accent)'; statusEl.textContent=`✓ ${transRows.length} transações + ${parcRows.length} parceladas enviadas!`; toast('✓ Dados enviados para o Sheets!','green');
   } catch(e){statusEl.style.color='var(--red)';statusEl.textContent='✗ '+e.message;toast('Erro: '+e.message,'red');}
 }
@@ -2682,6 +2738,38 @@ async function confirmarBaixa() {
       return 'R$ ' + Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
     }
 
+    const MESES_2026 = Array.from({length:12}, (_,i) => '2026-'+String(i+1).padStart(2,'0'));
+    async function loadContasGrid() {
+      const wrap = document.getElementById('contasGridWrap');
+      wrap.innerHTML = '<div style="padding:20px;color:var(--muted)">Carregando...</div>';
+      try {
+        const token = await garantirToken();
+        const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+        const ssid = shCfg.id || Q21_SSID;
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ssid}/values/extratos_importados!A2:F500`, { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) throw new Error('Falha ao ler extratos_importados: ' + res.status);
+        const data = await res.json();
+        const status = {};
+        (data.values || []).forEach(r => { if (r[0] && r[1]) status[r[0]+'|'+r[1]] = r[2] || 'Pendente'; });
+        const contas = getContasImportaveis();
+        const cor = { Pendente: 'var(--muted)', Importado: '#e8b339', Conferido: 'var(--accent)' };
+        const mesLabel = m => ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][parseInt(m.slice(5,7))-1];
+        let html = '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px">';
+        html += '<tr><th style="text-align:left;padding:6px 10px;color:var(--muted);font-family:var(--mono);font-weight:400">Conta</th>' + MESES_2026.map(m => `<th style="padding:6px 8px;color:var(--muted);font-family:var(--mono);font-weight:400">${mesLabel(m)}</th>`).join('') + '</tr>';
+        contas.forEach(c => {
+          html += `<tr><td style="padding:6px 10px;white-space:nowrap">${c.nome}<span style="color:var(--muted);font-family:var(--mono);font-size:10px"> · ${c.id}</span></td>`;
+          MESES_2026.forEach(m => {
+            const st = status[c.id+'|'+m] || 'Pendente';
+            html += `<td style="text-align:center;padding:4px" title="${st}"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${cor[st]}"></span></td>`;
+          });
+          html += '</tr>';
+        });
+        html += '</table></div>';
+        html += '<div style="margin-top:14px;display:flex;gap:16px;font-size:11px;color:var(--muted)">' + Object.entries(cor).map(([k,v]) => `<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${v};margin-right:5px"></span>${k}</span>`).join('') + '</div>';
+        wrap.innerHTML = html;
+      } catch (e) { wrap.innerHTML = '<div style="padding:20px;color:var(--red)">Erro: ' + e.message + '</div>'; }
+    }
+
     async function loadFaturasPagar() {
       const listEl = document.getElementById('pagList');
       const sumEl = document.getElementById('pagSummary');
@@ -2815,6 +2903,7 @@ function toast(msg, type='green') {
 window.addEventListener('load', () => {
   const savedKey = localStorage.getItem('q21_api_key');
   if (savedKey) { document.getElementById('apiKey').value=savedKey; document.getElementById('apiDot').classList.add('ok'); document.getElementById('apiStatusText').textContent='Claude ok'; }
+  document.getElementById('cfg-mes').value = new Date().toISOString().slice(0,7);
   renderCartoesLista();
   renderProjetosLista();
   initGoogleAuth();
