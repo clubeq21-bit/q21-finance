@@ -546,7 +546,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(255,255,255,0
             <div class="tab" onclick="showTab('cred',this)">Créditos</div>
             <div class="tab" onclick="showTab('dup',this)">Duplicatas</div>
           </div>
-          <div class="table-wrap"><table><thead><tr><th style="width:28px"></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Categoria</th><th>Subcategoria</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody id="reviewBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th style="width:28px"></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Categoria</th><th>Subcategoria</th><th>Projeto</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody id="reviewBody"></tbody></table></div>
         </div>
         <div class="btn-row">
           <button class="btn" onclick="invGoTo(2)">← Voltar</button>
@@ -1902,14 +1902,14 @@ function showTab(tab,el) { currentTab=tab; document.querySelectorAll('#inv-s3 .t
 function renderTable() {
   const tbody = document.getElementById('reviewBody'); tbody.innerHTML='';
   const filtered = txs.filter(t => { if(currentTab==='avista') return t.tipo==='avista'; if(currentTab==='parc') return t.tipo==='parc'; if(currentTab==='cred') return t.tipo==='cred'; if(currentTab==='dup') return t.isDup; return true; });
-  if(!filtered.length) { tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono);font-size:12px">nenhuma transação</td></tr>`; return; }
+  if(!filtered.length) { tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;font-family:var(--mono);font-size:12px">nenhuma transação</td></tr>`; return; }
   filtered.forEach(t => {
     const ri=txs.indexOf(t); const tr=document.createElement('tr');
     const badgeClass=t.isDup?'dup':t.tipo==='parc'?'parc':t.tipo==='cred'?'cred':'avista';
     const badgeText=t.isDup?'DUP':t.tipo==='parc'?'PARC':t.tipo==='cred'?'CRED':'VISTA';
     const valorDisplay=Math.abs(t.valor).toLocaleString('pt-BR',{minimumFractionDigits:2});
     const valorColor=t.tipo==='cred'?'color:var(--accent)':'';
-    tr.innerHTML=`<td><input type="checkbox" ${t.include?'checked':''} onchange="txs[${ri}].include=this.checked;updateMetrics()"></td><td style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap">${t.dataDisplay}</td><td><input class="desc-edit" value="${escHtml(t.desc)}" onchange="txs[${ri}].desc=this.value"></td><td><select class="tipo-sel" onchange="txs[${ri}].tipo=this.value;renderTable();updateMetrics()"><option value="avista" ${t.tipo==='avista'?'selected':''}>à vista</option><option value="parc" ${t.tipo==='parc'?'selected':''}>parcelada</option><option value="cred" ${t.tipo==='cred'?'selected':''}>crédito</option><option value="transf" ${t.tipo==='transf'?'selected':''}>transferência</option></select></td><td><input class="cat-edit" value="${escHtml(t.categoria)}" onchange="txs[${ri}].categoria=this.value" placeholder="categoria..."></td><td><input class="cat-edit" value="${escHtml(t.subcategoria)}" onchange="txs[${ri}].subcategoria=this.value" placeholder="subcategoria..."></td><td style="text-align:right;font-family:var(--mono);${valorColor}">${valorDisplay}</td><td><button class="del-btn" onclick="txs.splice(${ri},1);renderTable();updateMetrics()">✕</button></td>`;
+    tr.innerHTML=`<td><input type="checkbox" ${t.include?'checked':''} onchange="txs[${ri}].include=this.checked;updateMetrics()"></td><td style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap">${t.dataDisplay}</td><td><input class="desc-edit" value="${escHtml(t.desc)}" onchange="txs[${ri}].desc=this.value"></td><td><select class="tipo-sel" onchange="txs[${ri}].tipo=this.value;renderTable();updateMetrics()"><option value="avista" ${t.tipo==='avista'?'selected':''}>à vista</option><option value="parc" ${t.tipo==='parc'?'selected':''}>parcelada</option><option value="cred" ${t.tipo==='cred'?'selected':''}>crédito</option><option value="transf" ${t.tipo==='transf'?'selected':''}>transferência</option></select></td><td><input class="cat-edit" value="${escHtml(t.categoria)}" onchange="txs[${ri}].categoria=this.value" placeholder="categoria..."></td><td><input class="cat-edit" value="${escHtml(t.subcategoria)}" onchange="txs[${ri}].subcategoria=this.value" placeholder="subcategoria..."></td><td><input class="cat-edit" value="${escHtml(t.projeto||'')}" onchange="txs[${ri}].projeto=this.value" placeholder="projeto..."></td><td style="text-align:right;font-family:var(--mono);${valorColor}">${valorDisplay}</td><td><button class="del-btn" onclick="txs.splice(${ri},1);renderTable();updateMetrics()">✕</button></td>`;
     tbody.appendChild(tr);
   });
 }
