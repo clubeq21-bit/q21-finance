@@ -1839,6 +1839,34 @@ function handleFile(input) { const f = input.files[0]; if(f) { document.getEleme
 
 function setProgress(pct, msg) { document.getElementById('progressBar').style.display='block'; document.getElementById('progressFill').style.width=pct+'%'; document.getElementById('statusLine').textContent=msg; }
 
+// ── GLOSSÁRIO DE CATEGORIAS (aprende com o que já foi classificado) ────────
+let categoriaGlossarioCache = null;
+async function obterGlossarioCategorias() {
+  if (categoriaGlossarioCache) return categoriaGlossarioCache;
+  try {
+    const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
+    const ssid = shCfg.id || (typeof Q21_SSID !== 'undefined' ? Q21_SSID : '');
+    if (!ssid) return '';
+    const token = await garantirToken();
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ssid}/values/transacoes!C2:K3000`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const rows = data.values || [];
+    const mapa = new Map();
+    rows.forEach(r => {
+      const desc = (r[0] || '').split('\n')[0].trim();
+      const cat = r[7] || '', sub = r[8] || '';
+      if (!desc || !cat || cat === 'TRANSFERENCIA') return;
+      const chave = desc.replace(/[0-9]/g, '').slice(0, 25).trim().toUpperCase();
+      if (chave.length < 4) return;
+      mapa.set(chave, cat + (sub ? ' / ' + sub : ''));
+    });
+    const linhas = [...mapa.entries()].slice(-200).map(([k, v]) => `${k} → ${v}`);
+    categoriaGlossarioCache = linhas.join('\n');
+  } catch (e) { categoriaGlossarioCache = ''; }
+  return categoriaGlossarioCache;
+}
+
 async function processarComClaude() {
   const apiKey = getApiKey();
   if (!apiKey) { toast('Configure a API Key ⚙','red'); toggleSettings(); return; }
@@ -1856,7 +1884,10 @@ async function processarComClaude() {
       ? `Extraia transações de extrato de conta bancária/gateway (Pix, TED, boleto, débito, depósito). Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.\nExclua: saldo anterior, saldo final, resumo.\nFormato: {"t":[{"d":"DD/MM","n":"descrição exata do extrato","v":123.45,"tp":"a","ca":"Pix","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}\ntp: a=entrada ou saída normal, cr=crédito/estorno, tr=transferência interna/aplicação automática (ex: "Rende Fácil", "CDB automático", "Poupança automática", qualquer linha que seja a conta movendo dinheiro pra/de uma aplicação própria, não receita nem despesa real), pf=EXCLUIR (nunca usar p/parcelada aqui)\nca = canal real do movimento: Pix, TED, Boleto, Debito ou Deposito.\nValor negativo = saída (despesa/transferência), positivo = entrada (receita). Use o sinal exatamente como no extrato.\nIMPORTANTE: campo n = descrição EXATA do extrato sem modificar.\nClassifique com estas categorias:\n${isPJ ? catsPJ : catsPF}`
       : `Extraia transações de fatura de cartão de crédito. Responda SOMENTE com JSON puro, zero texto adicional, sem markdown.\nExclua: saldo anterior, pagamentos de fatura, resumo.\nFormato: {"t":[{"d":"DD/MM","n":"descrição exata do extrato","v":123.45,"tp":"a","pa":1,"pt":1,"cat":"Categoria","sub":"Subcategoria"}]}\ntp: a=à vista, p=parcelada, cr=crédito, pf=EXCLUIR\nPara parceladas: extraia pa e pt. Ex: PARC 03/12 → pa:3,pt:12\nIMPORTANTE: campo n = descrição EXATA do extrato sem modificar.\nIMPORTANTE: no campo n das parceladas, copie exatamente como está no extrato.\nClassifique com estas categorias:\n${isPJ ? catsPJ : catsPF}`;
     const contextoFinal = c.projetoContexto ? `\n\nCONTEXTO DO USUÁRIO (use pra desambiguar, NÃO aplique em todas as linhas cegamente): ${c.projetoContexto}. Analise CADA transação: se ela claramente combina com esse contexto (ex: Pix pequeno pra pessoa física, restaurante, hospedagem, transporte durante o período citado), adicione o campo "ctx":true no JSON dessa transação e use Categoria "Viagens". Se a transação for claramente de outra natureza (assinatura recorrente, mensalidade, compra que não tem nada a ver), NÃO marque "ctx" e classifique normalmente. Na dúvida, não marque.` : '';
-    const systemPromptFinal = systemPrompt + contextoFinal;
+    setProgress(35, 'Consultando histórico de categorias...');
+    const glossario = await obterGlossarioCategorias();
+    const glossarioFinal = glossario ? `\n\nHISTÓRICO DE CLASSIFICAÇÕES JÁ FEITAS (reaproveite o padrão quando a descrição começar parecido, principalmente nomes de Pix/pessoas/lojas recorrentes — nunca deixe categoria em branco se houver correspondência aqui):\n${glossario}` : '';
+    const systemPromptFinal = systemPrompt + contextoFinal + glossarioFinal;
     let messages;
     if (pdfBase64) messages = [{ role:'user', content: [{ type:'document', source:{type:'base64',media_type:'application/pdf',data:pdfBase64} }, { type:'text', text:'Extraia todas as transações desta fatura.' }] }];
     else messages = [{ role:'user', content:'Extraia as transações:\n\n'+texto }];
@@ -1973,6 +2004,7 @@ async function enviarParaSheets() {
     if(transRows.length){statusEl.textContent=`⏳ Enviando ${transRows.length} transações...`;const r1=await fetch(`${baseUrl}/${encodeURIComponent(shCfg.trans)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers,body:JSON.stringify({values:transRows})});if(!r1.ok){const e=await r1.json();throw new Error(e.error?.message||r1.status);}}
     if(parcRows.length){statusEl.textContent=`⏳ Enviando ${parcRows.length} parceladas...`;const r2=await fetch(`${baseUrl}/${encodeURIComponent(shCfg.parc)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers,body:JSON.stringify({values:parcRows})});if(!r2.ok){const e=await r2.json();throw new Error(e.error?.message||r2.status);}}
     await marcarExtratoImportado(shCfg, token, c.conta, c.mes, transRows.length + parcRows.length);
+    categoriaGlossarioCache = null;
     statusEl.style.color='var(--accent)'; statusEl.textContent=`✓ ${transRows.length} transações + ${parcRows.length} parceladas enviadas!`; toast('✓ Dados enviados para o Sheets!','green');
   } catch(e){statusEl.style.color='var(--red)';statusEl.textContent='✗ '+e.message;toast('Erro: '+e.message,'red');}
 }
