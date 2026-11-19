@@ -627,7 +627,7 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(0,0,0,0.05); 
 
     <!-- KPIs principais -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem" id="dashKpis">
-      <div class="metric"><div class="metric-label">receita do mês</div><div class="metric-value green" id="kpiReceita">—</div></div>
+      <div class="metric"><div class="metric-label" id="kpiReceitaLabel">receita do mês</div><div class="metric-value green" id="kpiReceita">—</div></div>
       <div class="metric"><div class="metric-label">despesas pagas</div><div class="metric-value amber" id="kpiDespesas">—</div></div>
       <div class="metric"><div class="metric-label">saldo líquido</div><div class="metric-value" id="kpiSaldo">—</div></div>
       <div class="metric"><div class="metric-label">comprometido futuro</div><div class="metric-value red" id="kpiFuturo">—</div></div>
@@ -2209,7 +2209,8 @@ async function loadDashboard() {
       ent:    tH.indexOf('Entidade'),
       proj:   tH.indexOf('Projeto'),
       status: tH.indexOf('Status'),
-      moeda:  tH.indexOf('Moeda')
+      moeda:  tH.indexOf('Moeda'),
+      conta:  tH.indexOf('ID_Conta')
     };
     const dIdx = {
       desc:   dH.indexOf('Descricao'),
@@ -2318,6 +2319,7 @@ async function loadDashboard() {
     if (recUSD > 0) recLabel += ` + $${recUSD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
     document.getElementById('kpiReceita').textContent = recLabel;
     document.getElementById('kpiReceita').style.fontSize = (recEUR > 0 || recUSD > 0) ? '13px' : '';
+    document.getElementById('kpiReceitaLabel').textContent = dashEscopoAtual === 'pessoal' ? 'receita direta (pessoal)' : 'receita do mês';
     document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
     const saldoEl = document.getElementById('kpiSaldo');
     saldoEl.textContent = fmt(saldo);
@@ -2342,12 +2344,18 @@ async function loadDashboard() {
     });
     document.getElementById('dashDespEntidade').innerHTML = renderBarChart(despByEnt, 'amber', fmt);
 
-    // ── RETIRADAS DA EMPRESA (Pix PJ→PF, só aparece do lado PF_BR como entrada) ──
+    // ── RETIRADAS DA EMPRESA (dinheiro do negócio caindo na conta pessoal) ──
+    const SUBS_RETIRADA = ['Movimentação própria', 'GMD Impacto', 'Dividendos GMD'];
     const retiradas = transRows.slice(1).filter(r => {
+      if (!matchMes(r[tIdx.data])) return false;
       const tipo = String(r[tIdx.tipo] || '').toUpperCase().trim();
       const sub = String(r[tIdx.sub] || '').trim();
+      const ent = r[tIdx.ent];
       const valor = parseCurrencyValue(r[tIdx.valor]);
-      return tipo === 'TRANSFERENCIA' && sub === 'Movimentação própria' && valor > 0 && matchMes(r[tIdx.data]);
+      if (valor <= 0) return false;
+      if (tipo === 'TRANSFERENCIA' && SUBS_RETIRADA.includes(sub)) return true;
+      if (tipo === 'RECEITA' && ENTIDADES_TRABALHO.includes(ent) && r[tIdx.conta] === 'BB_PF') return true;
+      return false;
     });
     const totalRetiradas = retiradas.reduce((s, r) => s + parseCurrencyValue(r[tIdx.valor]), 0);
     if (mesSel === 'all') {
