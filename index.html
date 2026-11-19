@@ -2322,7 +2322,7 @@ async function loadDashboard() {
     document.getElementById('kpiReceitaLabel').textContent = dashEscopoAtual === 'pessoal' ? 'receita direta (pessoal)' : 'receita do mês';
     document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
     const saldoEl = document.getElementById('kpiSaldo');
-    saldoEl.textContent = fmt(saldo);
+    saldoEl.textContent = (saldo < 0 ? '-' : '') + fmt(saldo);
     saldoEl.className = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
     document.getElementById('kpiFuturo').textContent = fmt(totalFuturo);
 
