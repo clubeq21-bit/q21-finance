@@ -2353,7 +2353,7 @@ async function loadDashboard() {
       const ent = r[tIdx.ent];
       const valor = parseCurrencyValue(r[tIdx.valor]);
       if (valor <= 0) return false;
-      if (tipo === 'TRANSFERENCIA' && SUBS_RETIRADA.includes(sub)) return true;
+      if (SUBS_RETIRADA.includes(sub)) return true;
       if (tipo === 'RECEITA' && ENTIDADES_TRABALHO.includes(ent) && r[tIdx.conta] === 'BB_PF') return true;
       return false;
     });
