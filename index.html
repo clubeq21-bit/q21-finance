@@ -220,6 +220,7 @@ textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
 .btn:hover { background: var(--border); border-color: var(--border2); }
 .btn.primary { background: var(--text); border-color: var(--text); color: #fff; }
 .btn.primary:hover { opacity: 0.85; }
+.escopo-btn.active { background: var(--brand); border-color: var(--brand); color: #fff; }
 .btn.success { background: rgba(0,212,170,0.1); border-color: rgba(0,212,170,0.3); color: var(--accent); }
 .btn.danger { background: rgba(239,75,75,0.1); border-color: rgba(239,75,75,0.3); color: var(--red); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -606,12 +607,22 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(0,0,0,0.05); 
         <div class="page-title">Dashboard financeiro</div>
         <div class="page-sub" id="dashSub">Carregando dados...</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <select id="dashMes" onchange="this.dataset.userSelected='1'; loadDashboard()" style="width:auto;font-family:var(--mono);font-size:12px;padding:6px 10px">
           <option value="all">Todos os meses</option>
         </select>
+        <select id="dashProjeto" onchange="loadDashboard()" style="width:auto;font-family:var(--mono);font-size:12px;padding:6px 10px">
+          <option value="all">Todos os projetos</option>
+        </select>
         <button class="btn" onclick="loadDashboard()" style="font-size:12px">↺ Atualizar</button>
       </div>
+    </div>
+
+    <!-- Escopo: Pessoal x Trabalho -->
+    <div style="display:flex;gap:6px;margin-bottom:1.25rem" id="dashEscopo">
+      <button class="btn escopo-btn active" data-escopo="all" onclick="setEscopo('all')" style="font-size:12px">Tudo</button>
+      <button class="btn escopo-btn" data-escopo="pessoal" onclick="setEscopo('pessoal')" style="font-size:12px">🏠 Pessoal</button>
+      <button class="btn escopo-btn" data-escopo="trabalho" onclick="setEscopo('trabalho')" style="font-size:12px">💼 Trabalho</button>
     </div>
 
     <!-- KPIs principais -->
@@ -632,6 +643,12 @@ code { font-family: var(--mono); font-size: 11px; background: rgba(0,0,0,0.05); 
         <div class="card-title">despesas por entidade</div>
         <div id="dashDespEntidade"></div>
       </div>
+    </div>
+
+    <!-- Retiradas: PJ -> PF -->
+    <div class="card" id="cardRetiradas" style="margin-bottom:1rem">
+      <div class="card-title">retiradas da empresa (transferências PJ → PF)</div>
+      <div id="dashRetiradas"></div>
     </div>
 
     <!-- Por categoria e parcelas futuras -->
@@ -2144,6 +2161,19 @@ async function computeFinanceSummary() {
   };
 }
 
+let dashEscopoAtual = 'all';
+const ENTIDADES_TRABALHO = ['PJ_BR','PJ_BR2','PJ_BR3','LLC_US','Q21_EUR'];
+function setEscopo(e) {
+  dashEscopoAtual = e;
+  document.querySelectorAll('.escopo-btn').forEach(b => b.classList.toggle('active', b.dataset.escopo === e));
+  loadDashboard();
+}
+function matchEscopo(ent) {
+  if (dashEscopoAtual === 'pessoal') return ent === 'PF_BR';
+  if (dashEscopoAtual === 'trabalho') return ENTIDADES_TRABALHO.includes(ent);
+  return true;
+}
+
 async function loadDashboard() {
   const shCfg = JSON.parse(localStorage.getItem('q21_sheets_cfg') || '{}');
   if (!shCfg.id) { toast('Configure o Google Sheets nas configurações ⚙', 'red'); toggleSettings(); return; }
@@ -2171,6 +2201,7 @@ async function loadDashboard() {
 
     const tIdx = {
       data:   tH.indexOf('Data'),
+      desc:   tH.indexOf('Descricao_Extrato'),
       valor:  tH.indexOf('Valor'),
       tipo:   tH.indexOf('Tipo'),
       cat:    tH.indexOf('Categoria'),
@@ -2226,10 +2257,25 @@ async function loadDashboard() {
       return getMesAno(dateStr) === mesSel;
     }
 
+    // ── POPULATE PROJETO SELECTOR ──
+    const projSelEl = document.getElementById('dashProjeto');
+    const curProj = projSelEl.value || 'all';
+    const projetos = new Set();
+    transRows.slice(1).forEach(r => { const p = r[tIdx.proj]; if (p) projetos.add(p); });
+    despRows.slice(1).forEach(r => { const p = r[dIdx.proj]; if (p) projetos.add(p); });
+    projSelEl.innerHTML = '<option value="all">Todos os projetos</option>' +
+      Array.from(projetos).sort().map(p => `<option value="${p}" ${curProj === p ? 'selected' : ''}>${p}</option>`).join('');
+    projSelEl.value = Array.from(projetos).includes(curProj) ? curProj : 'all';
+    const projSel = projSelEl.value;
+    function matchProj(proj) {
+      if (projSel === 'all') return true;
+      return proj === projSel;
+    }
+
     // ── RECEITAS — recebíveis com Status_Parcela = Paga ──
     const recPagas = recRows.slice(1).filter(r => {
       const status = String(r[rIdx.status] || '').trim();
-      return status === 'Paga' && matchMes(r[rIdx.venc]);
+      return status === 'Paga' && matchMes(r[rIdx.venc]) && matchEscopo(r[rIdx.ent]);
     });
 
     const recBRL = recPagas
@@ -2248,6 +2294,8 @@ async function loadDashboard() {
       const valor = parseCurrencyValue(r[tIdx.valor]);
       if (valor >= 0) return false;
       if (!matchMes(r[tIdx.data])) return false;
+      if (!matchEscopo(r[tIdx.ent])) return false;
+      if (!matchProj(r[tIdx.proj])) return false;
       const tipo = String(r[tIdx.tipo] || '').toUpperCase().trim();
       if (TIPOS_EXCL.includes(tipo)) return false;
       return true;
@@ -2259,7 +2307,8 @@ async function loadDashboard() {
     const parcFuturas = despRows.slice(1).filter(r => {
       const status = String(r[dIdx.status] || '').trim();
       const venc = parseBRDate(r[dIdx.venc]);
-      return status === 'Prevista' && venc && venc >= hoje && venc <= em30;
+      return status === 'Prevista' && venc && venc >= hoje && venc <= em30
+        && matchEscopo(r[dIdx.ent]) && matchProj(r[dIdx.proj]);
     });
     const totalFuturo = parcFuturas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[dIdx.valor])), 0);
 
@@ -2292,6 +2341,32 @@ async function loadDashboard() {
       despByEnt[ent] = (despByEnt[ent] || 0) + val;
     });
     document.getElementById('dashDespEntidade').innerHTML = renderBarChart(despByEnt, 'amber', fmt);
+
+    // ── RETIRADAS DA EMPRESA (Pix PJ→PF, só aparece do lado PF_BR como entrada) ──
+    const retiradas = transRows.slice(1).filter(r => {
+      const tipo = String(r[tIdx.tipo] || '').toUpperCase().trim();
+      const sub = String(r[tIdx.sub] || '').trim();
+      const valor = parseCurrencyValue(r[tIdx.valor]);
+      return tipo === 'TRANSFERENCIA' && sub === 'Movimentação própria' && valor > 0 && matchMes(r[tIdx.data]);
+    });
+    const totalRetiradas = retiradas.reduce((s, r) => s + parseCurrencyValue(r[tIdx.valor]), 0);
+    if (mesSel === 'all') {
+      const retByMes = {};
+      retiradas.forEach(r => {
+        const mes = getMesAno(r[tIdx.data]);
+        if (mes) retByMes[mes] = (retByMes[mes] || 0) + parseCurrencyValue(r[tIdx.valor]);
+      });
+      const mesSorted = Object.entries(retByMes).sort((a,b) => a[0].localeCompare(b[0]));
+      document.getElementById('dashRetiradas').innerHTML = mesSorted.length
+        ? `<div style="margin-bottom:8px;font-size:11px;color:var(--muted)">total: <span style="color:var(--text);font-weight:600">${fmt(totalRetiradas)}</span></div>` +
+          mesSorted.map(([mes, v]) => renderRow(mes, fmt(v), 'amber')).join('')
+        : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhuma retirada identificada</div>';
+    } else {
+      document.getElementById('dashRetiradas').innerHTML = retiradas.length
+        ? `<div style="margin-bottom:8px;font-size:11px;color:var(--muted)">total do mês: <span style="color:var(--text);font-weight:600">${fmt(totalRetiradas)}</span></div>` +
+          retiradas.map(r => renderRow(r[tIdx.data] + ' · ' + String(r[tIdx.desc]||'').slice(0,30), fmt(parseCurrencyValue(r[tIdx.valor])), 'amber')).join('')
+        : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhuma retirada em ' + mesSel + '</div>';
+    }
 
     // ── TOP CATEGORIAS ──
     const catMap = {};
@@ -2329,7 +2404,7 @@ async function loadDashboard() {
     // ── PROJEÇÃO RECEBÍVEIS ──
     const todasPrevistas = recRows.slice(1).filter(r => {
       const status = String(r[rIdx.status] || '').trim();
-      return status === 'Prevista' || status === 'Vencida';
+      return (status === 'Prevista' || status === 'Vencida') && matchEscopo(r[rIdx.ent]);
     });
 
     if (mesSel === 'all') {
@@ -2384,7 +2459,7 @@ async function loadDashboard() {
     }
 
     // ── INADIMPLÊNCIA ──
-    const vencidas = recRows.slice(1).filter(r => String(r[rIdx.status] || '').trim() === 'Vencida');
+    const vencidas = recRows.slice(1).filter(r => String(r[rIdx.status] || '').trim() === 'Vencida' && matchEscopo(r[rIdx.ent]));
     const inadByCliente = {};
     vencidas.forEach(r => {
       const cli = String(r[rIdx.cliente] || '').trim() || 'Desconhecido';
