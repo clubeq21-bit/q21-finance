@@ -75,6 +75,20 @@ body {
   background: transparent; cursor: pointer;
   color: var(--muted); transition: all 0.15s;
 }
+
+@media (max-width: 720px) {
+  .nav { padding: 0 0.75rem; }
+  .nav-name { display: none; }
+  .nav-right {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    max-width: calc(100vw - 60px);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-right::-webkit-scrollbar { display: none; }
+  .nav-btn, .settings-btn { flex: 0 0 auto; }
+}
 .nav-btn:hover { color: var(--text); border-color: var(--border2); background: var(--surface); }
 .nav-btn.active { color: var(--accent); border-color: rgba(0,212,170,0.3); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted2); }
