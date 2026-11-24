@@ -2081,6 +2081,16 @@ function parseCurrencyValue(v) {
 }
 
 // ── SHARED DATE/FORMAT HELPERS ──────────────────────────────────────────
+// Linhas antigas do ASAAS_PJ guardam a Data como serial do Sheets (ex: "46295"),
+// não "DD/MM/AAAA" — sem isso, matchMes descarta essas linhas e Trabalho some do mês.
+function excelSerialToDate(n) {
+  const base = new Date(1899, 11, 30);
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + n);
+}
+function isExcelSerial(str) {
+  return /^\d{4,6}$/.test(str);
+}
+
 function parseBRDate(s) {
   if (!s) return null;
   if (s instanceof Date) return s;
@@ -2091,6 +2101,8 @@ function parseBRDate(s) {
       const y = p[2].length === 2 ? '20' + p[2] : p[2];
       return new Date(parseInt(y), parseInt(p[1]) - 1, parseInt(p[0]));
     }
+  } else if (isExcelSerial(str)) {
+    return excelSerialToDate(parseInt(str, 10));
   } else if (str.includes('-')) {
     return new Date(str);
   }
@@ -2106,6 +2118,9 @@ function getMesAno(s) {
       const y = p[2].length === 2 ? '20' + p[2] : p[2];
       return y + '/' + p[1].padStart(2, '0');
     }
+  } else if (isExcelSerial(str)) {
+    const d = excelSerialToDate(parseInt(str, 10));
+    return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0');
   } else if (str.includes('-') && str.length >= 7) {
     return str.slice(0, 4) + '/' + str.slice(5, 7);
   }
