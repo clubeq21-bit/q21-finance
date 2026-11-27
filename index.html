@@ -2128,6 +2128,8 @@ function getMesAno(s) {
 }
 
 function fmt(n) { return 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+const SIMBOLOS_MOEDA = { EUR: '€ ', USD: '$ ', BRL: 'R$ ' };
+function fmtMoeda(n, moeda) { return (SIMBOLOS_MOEDA[moeda] || 'R$ ') + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ── FINANCE SUMMARY (dados reais, calculados a partir da planilha inteira) ──
 async function computeFinanceSummary() {
@@ -2372,7 +2374,15 @@ async function loadDashboard() {
       if (TIPOS_EXCL.includes(tipo)) return false;
       return true;
     });
-    const totalDespesas = despPagas.reduce((s, r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+    const totalDespesas = despPagas
+      .filter(r => !['EUR','USD'].includes(String(r[tIdx.moeda]||'').toUpperCase()))
+      .reduce((s, r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+    const despEUR = despPagas
+      .filter(r => String(r[tIdx.moeda]||'').toUpperCase() === 'EUR')
+      .reduce((s, r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
+    const despUSD = despPagas
+      .filter(r => String(r[tIdx.moeda]||'').toUpperCase() === 'USD')
+      .reduce((s, r) => s + Math.abs(parseCurrencyValue(r[tIdx.valor])), 0);
     const saldo = recBRL - totalDespesas;
 
     // ── PARCELAS FUTURAS ──
@@ -2391,29 +2401,40 @@ async function loadDashboard() {
     document.getElementById('kpiReceita').textContent = recLabel;
     document.getElementById('kpiReceita').style.fontSize = (recEUR > 0 || recUSD > 0) ? '13px' : '';
     document.getElementById('kpiReceitaLabel').textContent = dashEscopoAtual === 'pessoal' ? 'receita direta (pessoal)' : 'receita do mês';
-    document.getElementById('kpiDespesas').textContent = fmt(totalDespesas);
+    let despLabel = fmt(totalDespesas);
+    if (despEUR > 0) despLabel += ` + €${despEUR.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    if (despUSD > 0) despLabel += ` + $${despUSD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    document.getElementById('kpiDespesas').textContent = despLabel;
+    document.getElementById('kpiDespesas').style.fontSize = (despEUR > 0 || despUSD > 0) ? '13px' : '';
     const saldoEl = document.getElementById('kpiSaldo');
     saldoEl.textContent = (saldo < 0 ? '-' : '') + fmt(saldo);
     saldoEl.className = 'metric-value ' + (saldo >= 0 ? 'green' : 'red');
     document.getElementById('kpiFuturo').textContent = fmt(totalFuturo);
 
-    // ── RECEITAS POR ENTIDADE ──
-    const recByEnt = {};
+    // ── RECEITAS POR ENTIDADE (separado por moeda, nunca soma EUR/USD como se fosse BRL) ──
+    const recByEnt = {}; const recByEntMoeda = {};
     recPagas.forEach(r => {
       const ent = r[rIdx.ent] || 'Sem entidade';
+      const moeda = String(r[rIdx.moeda] || 'BRL').toUpperCase();
       const val = Math.abs(parseCurrencyValue(r[rIdx.valor]));
-      if (val > 0) recByEnt[ent] = (recByEnt[ent] || 0) + val;
+      if (val <= 0) return;
+      const key = moeda === 'BRL' ? ent : `${ent} (${moeda})`;
+      recByEnt[key] = (recByEnt[key] || 0) + val;
+      recByEntMoeda[key] = moeda;
     });
-    document.getElementById('dashRecEntidade').innerHTML = renderBarChart(recByEnt, 'green', fmt);
+    document.getElementById('dashRecEntidade').innerHTML = renderBarChart(recByEnt, 'green', (v, label) => fmtMoeda(v, recByEntMoeda[label]));
 
-    // ── DESPESAS POR ENTIDADE ──
-    const despByEnt = {};
+    // ── DESPESAS POR ENTIDADE (separado por moeda) ──
+    const despByEnt = {}; const despByEntMoeda = {};
     despPagas.forEach(r => {
       const ent = r[tIdx.ent] || 'Sem entidade';
+      const moeda = String(r[tIdx.moeda] || 'BRL').toUpperCase();
       const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
-      despByEnt[ent] = (despByEnt[ent] || 0) + val;
+      const key = moeda === 'BRL' ? ent : `${ent} (${moeda})`;
+      despByEnt[key] = (despByEnt[key] || 0) + val;
+      despByEntMoeda[key] = moeda;
     });
-    document.getElementById('dashDespEntidade').innerHTML = renderBarChart(despByEnt, 'amber', fmt);
+    document.getElementById('dashDespEntidade').innerHTML = renderBarChart(despByEnt, 'amber', (v, label) => fmtMoeda(v, despByEntMoeda[label]));
 
     // ── RETIRADAS DA EMPRESA (dinheiro do negócio caindo na conta pessoal) ──
     const SUBS_RETIRADA = ['Movimentação própria', 'GMD Impacto', 'Dividendos GMD'];
@@ -2447,9 +2468,10 @@ async function loadDashboard() {
         : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhuma retirada em ' + mesSel + '</div>';
     }
 
-    // ── TOP CATEGORIAS ──
+    // ── TOP CATEGORIAS (só BRL; EUR/USD aparecem separados em Despesas por Entidade) ──
     const catMap = {};
     despPagas.forEach(r => {
+      if (['EUR','USD'].includes(String(r[tIdx.moeda]||'').toUpperCase())) return;
       const cat = r[tIdx.cat] || 'Sem categoria';
       const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
       catMap[cat] = (catMap[cat] || 0) + val;
@@ -2469,15 +2491,18 @@ async function loadDashboard() {
       ? parcSorted.map(([k, v]) => renderRow(k, fmt(v), 'red')).join('')
       : '<div style="color:var(--muted);font-size:12px;padding:8px">Nenhuma parcela vencendo em 30 dias ✓</div>';
 
-    // ── POR PROJETO ──
-    const projMap = {};
+    // ── POR PROJETO (separado por moeda) ──
+    const projMap = {}; const projMapMoeda = {};
     despPagas.forEach(r => {
       const proj = r[tIdx.proj] || 'Sem projeto';
+      const moeda = String(r[tIdx.moeda] || 'BRL').toUpperCase();
       const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
-      projMap[proj] = (projMap[proj] || 0) + val;
+      const key = moeda === 'BRL' ? proj : `${proj} (${moeda})`;
+      projMap[key] = (projMap[key] || 0) + val;
+      projMapMoeda[key] = moeda;
     });
     document.getElementById('dashProjetos').innerHTML = renderBarChart(
-      Object.fromEntries(Object.entries(projMap).sort((a, b) => b[1] - a[1])), 'purple', fmt
+      Object.fromEntries(Object.entries(projMap).sort((a, b) => b[1] - a[1])), 'purple', (v, label) => fmtMoeda(v, projMapMoeda[label])
     );
 
     // ── PROJEÇÃO RECEBÍVEIS ──
@@ -2601,7 +2626,7 @@ function renderBarChart(data, color, fmtFn) {
     return `<div style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">
         <span style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%">${label}</span>
-        <span style="font-family:var(--mono);font-size:11px;color:${c}">${fmtFn(val)}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:${c}">${fmtFn(val, label)}</span>
       </div>
       <div style="height:4px;background:var(--border);border-radius:99px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${c};border-radius:99px;transition:width 0.6s ease"></div>
