@@ -2472,7 +2472,7 @@ async function loadDashboard() {
     const catMap = {};
     despPagas.forEach(r => {
       if (['EUR','USD'].includes(String(r[tIdx.moeda]||'').toUpperCase())) return;
-      const cat = r[tIdx.cat] || 'Sem categoria';
+      const cat = String(r[tIdx.cat] || '').trim() || 'Sem categoria';
       const val = Math.abs(parseCurrencyValue(r[tIdx.valor]));
       catMap[cat] = (catMap[cat] || 0) + val;
     });
